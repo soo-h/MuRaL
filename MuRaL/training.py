@@ -103,6 +103,7 @@ def train(config, args, model_type, checkpoint_dir=None):
     save_valid_preds = args.save_valid_preds
     grace_period = args.grace_period
 
+    config['use_sample_weight'] = args.recurrent
     # unet specify para
     if model_type == 'indel':
         if not hasattr(args, 'down_list'):
@@ -296,7 +297,11 @@ def train(config, args, model_type, checkpoint_dir=None):
         del model_state
         torch.cuda.empty_cache() 
 
-        criterion = torch.nn.CrossEntropyLoss(reduction='sum')
+        # criterion = torch.nn.CrossEntropyLoss(reduction='sum')
+        if config.get('use_sample_weight', False):
+            criterion = torch.nn.CrossEntropyLoss(reduction='none')
+        else:
+            criterion = torch.nn.CrossEntropyLoss(reduction='sum')
 
         if config['train_all']:
             # Train all parameters
@@ -324,7 +329,10 @@ def train(config, args, model_type, checkpoint_dir=None):
         model.apply(weights_init)
     
     # Set loss function
-    criterion = torch.nn.CrossEntropyLoss(reduction='sum')
+    if config.get('use_sample_weight', False):
+        criterion = torch.nn.CrossEntropyLoss(reduction='none')
+    else:
+        criterion = torch.nn.CrossEntropyLoss(reduction='sum')
     #weights = torch.tensor([0.00515898, 0.44976093, 0.23657462, 0.30850547]).to(device)
     #weights = torch.tensor([0.00378079, 0.42361806, 0.11523816, 0.45736299]).to(device)
     #criterion = torch.nn.CrossEntropyLoss(weight=weights, reduction='sum')
@@ -401,7 +409,7 @@ def train(config, args, model_type, checkpoint_dir=None):
         time_per_batch_training = 0
         get_batch_time = time.time()
         ############################
-        for y, cont_x, cat_x, distal_x in dataloader_train:
+        for y, cont_x, cat_x, distal_x, w in dataloader_train:
             time_per_batch_fetch += time.time() - get_batch_time
             batch_count += 1
             ### get batch time view ##############
@@ -422,7 +430,12 @@ def train(config, args, model_type, checkpoint_dir=None):
 
             # Forward Pass
             preds = model.forward((cont_x, cat_x), distal_x) if model_type == 'snv' else model.forward(distal_x)
-            loss = criterion(preds, y.long().squeeze())
+            if config.get('use_sample_weight', False):
+                per_sample_loss = criterion(preds, y.long().squeeze())
+                w = w.to(device)
+                loss = (per_sample_loss * w.squeeze()).sum()
+            else:
+                loss = criterion(preds, y.long().squeeze())
             optimizer.zero_grad()
             loss.backward()
             # time view
@@ -465,7 +478,7 @@ def train(config, args, model_type, checkpoint_dir=None):
             #print('model.conv1.0.weight.grad:', model.conv1.0.weight)
             save_path = get_save_path(args.use_ray, args.trial_dir, epoch)
 
-            valid_pred_y, valid_total_loss = model_predict_m(model, dataloader_valid, criterion, device, n_class, distal=True, model_type=model_type)
+            valid_pred_y, valid_total_loss = model_predict_m(model, dataloader_valid, criterion, device, n_class, distal=True, model_type=model_type, use_sample_weight=config.get('use_sample_weight', False))
 
             valid_y_prob = pd.DataFrame(data=to_np(F.softmax(valid_pred_y, dim=1)), columns=prob_names)
             
@@ -475,7 +488,15 @@ def train(config, args, model_type, checkpoint_dir=None):
             
             # Train the calibrator using the validataion data
             #valid_y_prob = valid_y_prob.reset_index() #### for "ValueError: Input contains NaN"
-            fdiri_cal, fdiri_nll = calibrate_prob(valid_y_prob.to_numpy(), valid_y, device, calibr_name='FullDiri')
+            if config.get('use_sample_weight', False):
+                weights = data_local_valid['sample_weight'].values.astype(int)
+                # 按count展开验证集
+                indices = np.repeat(np.arange(len(weights)), np.maximum(weights, 1).astype(int))
+                valid_y_prob_expanded = valid_y_prob.to_numpy()[indices]
+                valid_y_expanded = valid_y[indices]
+                fdiri_cal, fdiri_nll = calibrate_prob(valid_y_prob_expanded, valid_y_expanded, device, calibr_name='FullDiri')
+            else:
+                fdiri_cal, fdiri_nll = calibrate_prob(valid_y_prob.to_numpy(), valid_y, device, calibr_name='FullDiri')
             #fdirio_cal, _ = calibrate_prob(valid_y_prob.to_numpy(), valid_y, device, calibr_name='FullDiriODIR')
             #vec_cal, _ = calibrate_prob(valid_y_prob.to_numpy(), valid_y, device, calibr_name='VectS')
             #tmp_cal, _ = calibrate_prob(valid_y_prob.to_numpy(), valid_y, device, calibr_name='TempS')
@@ -485,15 +506,16 @@ def train(config, args, model_type, checkpoint_dir=None):
                 prob_poisson_cal = poisson_calibrate(valid_y_prob)
 
             #Evaluation
-            evaluator_before_calibra = Evaluator(data_local_valid, valid_y_prob, n_class, printer=print)
-            evaluator_after_calibra = Evaluator(data_local_valid, prob_cal, n_class, calibra="FullDiri", printer=print)
+            use_obs_count = config.get('use_sample_weight', False)
+            evaluator_before_calibra = Evaluator(data_local_valid, valid_y_prob, n_class, use_obs_count=use_obs_count, printer=print)
+            evaluator_after_calibra = Evaluator(data_local_valid, prob_cal, n_class, calibra="FullDiri", use_obs_count=use_obs_count, printer=print)
 
             kmer_list = [2, 4, 6] if model_type == 'indel' else [3, 5, 7]
 
             evaluator_before_calibra.evaluate_kmer(kmer_list)
             evaluator_after_calibra.evaluate_kmer(kmer_list)
             if args.poisson_calib:
-                evaluator_after_calibra_poisson = Evaluator(data_local_valid, prob_poisson_cal, n_class, calibra="Poisson", printer=print)
+                evaluator_after_calibra_poisson = Evaluator(data_local_valid, prob_poisson_cal, n_class, calibra="Poisson", use_obs_count=use_obs_count, printer=print)
                 evaluator_after_calibra_poisson.evaluate_kmer(kmer_list)
 
             print ('Training Loss: ', total_loss/train_size)

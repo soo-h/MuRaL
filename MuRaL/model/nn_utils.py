@@ -34,7 +34,7 @@ def weights_init(m):
                 if 'weight' in p:
                     torch.nn.init.xavier_uniform_(m.__getattr__(p))
 
-def model_predict_m(model, dataloader, criterion, device, n_class, distal=True, model_type='snv'):
+def model_predict_m(model, dataloader, criterion, device, n_class, distal=True, model_type='snv', use_sample_weight=False):
     """Do model prediction using dataloader"""
     import time
     model.to(device)
@@ -45,7 +45,7 @@ def model_predict_m(model, dataloader, criterion, device, n_class, distal=True, 
     batch_count = 0
     step_time = time.time()
     with torch.no_grad():
-        for y, cont_x, cat_x, distal_x in dataloader:
+        for y, cont_x, cat_x, distal_x, w in dataloader:
             batch_count += 1
             cat_x = cat_x.to(device)
             cont_x = cont_x.to(device)
@@ -61,7 +61,12 @@ def model_predict_m(model, dataloader, criterion, device, n_class, distal=True, 
                 preds = model.forward(distal_x)
             pred_y = torch.cat((pred_y, preds), dim=0)
                 
-            loss = criterion(preds, y.long().squeeze(1))
+            if use_sample_weight:
+                per_sample_loss = criterion(preds, y.long().squeeze(1))
+                w = w.to(device)
+                loss = (per_sample_loss * w.squeeze(1)).sum()
+            else:
+                loss = criterion(preds, y.long().squeeze(1))
             total_loss += loss.item()
             
             if device == torch.device('cpu'):

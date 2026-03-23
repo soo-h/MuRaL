@@ -81,6 +81,9 @@ def add_common_train_parser(
                           Save prediction results for validation data in the checkpoint
                           folders. Default: False.
                           """ ).strip())
+
+    data_args.add_argument('--recurrent', default=False, action='store_true',
+                        help='Use per-site sample weights from BED name field for loss weighting. Default: False.')
     
     model_args.add_argument('--distal_order', type=int, metavar='INT', default=1, 
                           help=textwrap.dedent("""

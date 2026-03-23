@@ -105,6 +105,11 @@ def add_common_predict_parser(
                                   Accept one or more positive integers for window size (bp), 
                                   e.g., "10000 50000". Default: no value.
                                   """ ).strip())
+
+    predict_optional.add_argument('--recurrent', default=False, action='store_true',  
+                                  help=textwrap.dedent("""
+                                  Calculate correlation used recurrent mutation.
+                                  """).strip())
     
     predict_parser._action_groups.append(predict_optional)
 

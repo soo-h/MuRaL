@@ -18,6 +18,7 @@ from scipy.stats import pearsonr
 import numpy as np
 
 from MuRaL.data.preprocessing import get_expanded_region
+from MuRaL.utils.info_utils import parse_pred_header, read_pred_line
 from typing import Dict, Any
 
 def parse_arguments():
@@ -51,10 +52,10 @@ class KmerMutSaver:
         self.kmer_mut_obs = {}
         self.kmer_mut_pred = {}
     
-    def add_obs(self, kmer, mut_type):
+    def add_obs(self, kmer, mut_type, count=1):
         if kmer not in self.kmer_mut_obs:
             self.kmer_mut_obs[kmer] = np.zeros(self.n_class)
-        self.kmer_mut_obs[kmer][mut_type] += 1
+        self.kmer_mut_obs[kmer][mut_type] += count
     
     def add_pred(self, kmer, probs):
         if kmer not in self.kmer_mut_pred:
@@ -93,14 +94,14 @@ def load_chromosome_sequence(genome_file: Path, chrom: str) -> str:
 # ----------------------
 # K-mer Processing
 # ----------------------
-def process_kmer_seq(strand: str, sequence: str, mut_type: int, probs: list, data_saver) -> None:
+def process_kmer_seq(strand: str, sequence: str, mut_type: int, probs: list, count:int, data_saver) -> None:
     """Process mutation site statistics for a single k-mer"""
     if not is_valid_sequence(sequence):
         return
     # get kmer sequence
     canonical_kmer = get_canonical_kmer(strand, sequence)
     # Update k-mer counts
-    data_saver.add_obs(canonical_kmer, mut_type)
+    data_saver.add_obs(canonical_kmer, mut_type, count)
     data_saver.add_pred(canonical_kmer, probs)
     
     
@@ -200,6 +201,17 @@ def run_kmer_corr_calc(args, model_type:'str') -> None:
     current_chrom = None
     chromosome_seq = ""
     radius = args.kmer_length // 2
+
+    if args.kmer_length % 2 == 0 and model_type == 'snv':
+        print("Error: kmer_length must be an odd number for SNV model "
+              f"(got {args.kmer_length}). The focal site needs equal flanking "
+              "bases on both sides.", file=sys.stderr)
+        sys.exit(1)
+    if args.kmer_length % 2 != 0 and model_type == 'indel':
+        print("Error: kmer_length must be an even number for INDEL model "
+              f"(got {args.kmer_length}). The focal site needs equal flanking "
+              "bases on both sides.", file=sys.stderr)
+        sys.exit(1)
     
     # Open prediction file
     opener = gzip.open if args.pred_file.endswith('.gz') else open
@@ -209,23 +221,25 @@ def run_kmer_corr_calc(args, model_type:'str') -> None:
         header = next(obs_file)
         if not header.startswith('chrom'):
             raise ValueError(f"Invalid file header: {header.strip()}, header should be continue with 'chrom'")
-            # Parse line
-        # check file is consistent with parameter
-        header = header.strip().split('\t')
-        if len(header) != n_class + 5:
-            raise ValueError(
-                f"Column count mismatch. Expected {n_class + 5} columns, "
-                f"got {len(len(header))} in line: {header}")
+        # Parse header
+        header_info = parse_pred_header(header)
+        if args.recurrent and not header_info['has_info']:
+            print('WARNING: --recurrent is enabled but prediction file has no '
+                  'info column. Falling back to count=1 for all sites.',
+                  file=sys.stderr)
 
         for line in obs_file:
             line = line.strip().split('\t')
-            chrom, start, end, strand, mut = line[:5] 
+            parsed = read_pred_line(line, header_info, recurrent=args.recurrent)
+            chrom = parsed['chrom']
+            start, end = parsed['start'], parsed['end']
+            strand = parsed['strand']
+            mut = parsed['mut_type']
+            probs = parsed['probs']
+            count = parsed['count']
+
             if model_type == 'indel':
                 strand = args.strand
-            probs = np.asarray(line[5:], dtype='float') # prob0 to prob n
-
-            start, end, mut = int(start), int(end), int(mut)
-            
             # Load chromosome sequence when needed
             if chrom != current_chrom:
                 chromosome_seq = load_chromosome_sequence(args.ref_genome, chrom)
@@ -247,6 +261,7 @@ def run_kmer_corr_calc(args, model_type:'str') -> None:
                     sequence=kmer_seq,
                     mut_type=mut,
                     probs=probs,
+                    count = count,
                     data_saver=kmer_mut_saver
                 )
                 process_kmer_seq(
@@ -254,6 +269,7 @@ def run_kmer_corr_calc(args, model_type:'str') -> None:
                     sequence=kmer_seq,
                     mut_type=mut,
                     probs=probs,
+                    count = count,
                     data_saver=kmer_mut_saver
                 )
             else:
@@ -262,6 +278,7 @@ def run_kmer_corr_calc(args, model_type:'str') -> None:
                     sequence=kmer_seq,
                     mut_type=mut,
                     probs=probs,
+                    count = count,
                     data_saver=kmer_mut_saver
                 )
 

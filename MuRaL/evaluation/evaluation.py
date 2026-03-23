@@ -23,6 +23,8 @@ from dirichletcal.calib.tempscaling import TemperatureScaling
 from dirichletcal.calib.fulldirichlet import FullDirichletCalibrator
 from sklearn.multiclass import OneVsRestClassifier
 
+from MuRaL.utils.info_utils import parse_info
+
 def count_parameters(model):
     """Count parameters in a network model"""
     table = PrettyTable(["Modules", "Parameters"])
@@ -45,7 +47,7 @@ def f3mer_comp(data_and_prob):
     
     return obs_pred_freq['mut_type'].corr(obs_pred_freq['prob'])
 
-def freq_kmer_comp_multi(data_and_prob, k, n_class):
+def freq_kmer_comp_multi(data_and_prob, k, n_class, use_obs_count=False):
     """Compare the observed and predicted frequencies of mutations in 3-mers"""
     
     # Generate the column names
@@ -56,72 +58,29 @@ def freq_kmer_comp_multi(data_and_prob, k, n_class):
     
     corr_list = []
     for i in range(0, n_class):
-        obs_pred_freq = pd.concat([data_and_prob[ mer_list + [prob_list[i]]], data_and_prob['mut_type']==i ], axis=1)
+        if use_obs_count:
+            obs_col = data_and_prob['sample_weight'].where(
+                data_and_prob['mut_type'] == i, 0.0
+                ).rename('obs')
+        else:
+            obs_col = (data_and_prob['mut_type'] == i).astype(float).rename('obs')
+        obs_pred_freq = pd.concat(
+            [data_and_prob[ mer_list + [prob_list[i]]], obs_col], axis=1
+            )
         
         # Get average rates for each k-mer
         obs_pred_freq = obs_pred_freq.groupby(mer_list).mean()
         
         # Calcuate correlations 
-        corr_list.append(obs_pred_freq['mut_type'].astype(float).corr(obs_pred_freq[prob_list[i]].astype(float)))
+        corr_list.append(
+            obs_pred_freq['obs'].astype(float).corr(
+                obs_pred_freq[prob_list[i]].astype(float)
+                )
+                )
         
     return corr_list
 
-def f3mer_comp_rand(df, n_rows):
-    """Compare the frequencies of mutations in 3-mers in two randomly generated datasets"""
-    mean_corr = 0
-    
-    # Sampling 10 times
-    sampling_times = 10 
-    
-    for i in range(sampling_times):
-        freq1 = df[['us1','ds1','mut_type']].sample(n = n_rows).groupby(['us1','ds1']).mean()
-        freq2 = df[['us1','ds1','mut_type']].sample(n = n_rows).groupby(['us1','ds1']).mean()
-        #print(freq1, freq2)
-        
-        corr = freq1['mut_type'].astype(float).corr(freq2['mut_type'].astype(float))
-        print('corr of 3mer freq1 and freq2:', corr)
-        
-        mean_corr += corr
-    
-    print('mean corr:', mean_corr/sampling_times)
-
-def f5mer_comp_rand(df, n_rows):
-    """Compare the frequencies of mutations in 5-mers in two randomly generated datasets"""
-    mean_corr = 0
-    
-    # Sampling 10 times
-    sampling_times = 10 
-   
-    for i in range(sampling_times):
-        freq1 = df[['us2','us1','ds1','ds2','mut_type']].sample(n = n_rows).groupby(['us2','us1','ds1','ds2']).mean()
-        freq2 = df[['us2','us1','ds1','ds2','mut_type']].sample(n = n_rows).groupby(['us2','us1','ds1','ds2']).mean()
-        
-        corr = freq1['mut_type'].astype(float).corr(freq2['mut_type'].astype(float))
-        print('corr of 5mer freq1 and freq2:', corr)
-        
-        mean_corr += corr
-    
-    print('mean corr:', mean_corr/sampling_times)
-
-def f7mer_comp_rand(df, n_rows):
-    """Compare the frequencies of mutations in 7mers in two randomly generated datasets"""
-    mean_corr = 0
-    
-    # Sampling 10 times
-    sampling_times = 10 
-   
-    for i in range(sampling_times):
-        freq1 = df[['us3','us2','us1','ds1','ds2','ds3', 'mut_type']].sample(n = n_rows).groupby(['us3','us2','us1','ds1','ds2','ds3']).mean()
-        freq2 = df[['us3','us2','us1','ds1','ds2','ds3','mut_type']].sample(n = n_rows).groupby(['us3','us2','us1','ds1','ds2','ds3']).mean()
-        
-        corr = freq1['mut_type'].astype(float).corr(freq2['mut_type'].astype(float))
-        print('corr of 7mer freq1 and freq2:', corr)
-        
-        mean_corr += corr
-    
-    print('mean corr:', mean_corr/sampling_times)
-
-def corr_calc_sub(data, window, prob_names):
+def corr_calc_sub(data, window, prob_names, use_obs_count=False):
     """Calculate regional correlations"""
     n_class = len(prob_names)
     obs = [0]*n_class
@@ -158,7 +117,11 @@ def corr_calc_sub(data, window, prob_names):
             last_start = start
             
         # Count for observed type +1
-        obs[int(data.loc[i, 'mut_type'])] += 1              
+        if not use_obs_count:
+            obs_count = 1
+        else:
+            obs_count = parse_info(data.loc[i, 'info'])
+        obs[int(data.loc[i, 'mut_type'])] += obs_count
         
         # Add to the cumulative mutation probs
         for j in range(n_class):
@@ -192,11 +155,16 @@ def corr_calc_sub(data, window, prob_names):
     
     return corr_list
 
-def calc_avg_prob(df, n_class):
+def calc_avg_prob(df, n_class, use_obs_count=False):
     
     avg_list = []
     for i in range(n_class):
-        avg_list.append(sum(list(df['mut_type'] == i)) / df.shape[0])
+        if use_obs_count:
+            avg_list.append(
+                df.loc[df['mut_type'] == i, 'sample_weight'].sum() / df.shape[0]
+            )
+        else:
+            avg_list.append(sum(list(df['mut_type'] == i)) / df.shape[0])
 
     for i in range(n_class):
         avg_list.append(df['prob'+str(i)].mean())
@@ -487,7 +455,7 @@ def CB_loss(labels, logits, samples_per_cls, no_of_classes, loss_type, beta, gam
     return cb_loss
 
 class Evaluator:
-    def __init__(self, data_local, y_prob, n_class, calibra='no_calibra', printer=print):
+    def __init__(self, data_local, y_prob, n_class, calibra='no_calibra', use_obs_count=False, printer=print):
         self.n_class = n_class
         self.prob_names = ['prob'+str(i) for i in range(n_class)]
         self.data_local = data_local
@@ -497,6 +465,7 @@ class Evaluator:
         self.data_and_prob = self.preprocess()
         self.kmer_out_identify, self.regional_out_identify = self.set_output_identifiers()
         self.metrics = {}
+        self.use_obs_count = use_obs_count
     
     def preprocess(self):
         y_prob = pd.DataFrame(data=np.copy(self.y_prob), columns=self.prob_names)
@@ -523,12 +492,17 @@ class Evaluator:
         if self.calibra == 'no_calibra':
             self.printer("valid_data_and_prob.iloc[0:10]", self.data_and_prob.iloc[0:10])
         for k in kmer_list:
-            kmer_corr = freq_kmer_comp_multi(self.data_and_prob, k, self.n_class)
+            kmer_corr = freq_kmer_comp_multi(self.data_and_prob, k, self.n_class, self.use_obs_count)
             self.printer(f"{k}{self.kmer_out_identify}", kmer_corr)
     
     def evaluate_regional_corr(self, chr_pos, win_size_list=[100000, 500000], save_valid_preds=False, save_path=None):
-        valid_pred_df = pd.concat((chr_pos, self.data_and_prob[['mut_type'] + self.prob_names]), axis=1)
-        valid_pred_df.columns = ['chrom', 'start', 'end', 'strand', 'mut_type'] + self.prob_names
+        cols = self.prob_names + (['sample_weight'] if self.use_obs_count else [])
+        
+        assert (chr_pos['mut_type'].astype(int).values == self.data_and_prob['mut_type'].astype(int).values).all(), \
+            'ERROR: mut_type mismatch between position info and prediction data. ' \
+                'BED file or data pipeline may have inconsistent ordering.'
+
+        valid_pred_df = pd.concat((chr_pos, self.data_and_prob[cols]), axis=1)
         valid_pred_df.sort_values(['chrom', 'start'], inplace=True)
         valid_pred_df.reset_index(drop=True, inplace=True)
 
@@ -536,7 +510,7 @@ class Evaluator:
             self.printer('valid_pred_df: ', valid_pred_df.head())
 
         for win_size in win_size_list:
-            corr_win = corr_calc_sub(valid_pred_df, win_size, self.prob_names)
+            corr_win = corr_calc_sub(valid_pred_df, win_size, self.prob_names, self.use_obs_count)
             self.printer(self.regional_out_identify, str(win_size)+'bp', corr_win)
         
         if save_valid_preds:
@@ -555,12 +529,12 @@ class Evaluator:
             
         region_avg = []
         for i in range(n_regions):
-            corr_first_kmer = freq_kmer_comp_multi(self.data_and_prob.iloc[region_size*i: region_size*(i+1), ], kmer_list[0], self.n_class)    
-            corr_second_kmer = freq_kmer_comp_multi(self.data_and_prob.iloc[region_size*i: region_size*(i+1), ], kmer_list[1], self.n_class)
+            corr_first_kmer = freq_kmer_comp_multi(self.data_and_prob.iloc[region_size*i: region_size*(i+1), ], kmer_list[0], self.n_class, self.use_obs_count)    
+            corr_second_kmer = freq_kmer_comp_multi(self.data_and_prob.iloc[region_size*i: region_size*(i+1), ], kmer_list[1], self.n_class, self.use_obs_count)
                 
             score += np.sum([(1-corr)**2 for corr in corr_first_kmer]) + np.sum([(1-corr)**2 for corr in corr_second_kmer])
                 
-            avg_prob = calc_avg_prob(self.data_and_prob.iloc[region_size*i: region_size*(i+1), ], self.n_class)
+            avg_prob = calc_avg_prob(self.data_and_prob.iloc[region_size*i: region_size*(i+1), ], self.n_class, self.use_obs_count)
             region_avg.append(avg_prob)
             #print("avg_prob:", avg_prob, i)
             
