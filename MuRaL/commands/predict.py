@@ -110,7 +110,16 @@ def add_common_predict_parser(
                                   help=textwrap.dedent("""
                                   Calculate correlation used recurrent mutation.
                                   """).strip())
-    
+
+    predict_optional.add_argument('--poisson_calib_only', default=False, 
+                                  action='store_true',
+                                  help=textwrap.dedent("""
+                                  Skip model prediction. Read an existing prediction file 
+                                  (specified by --pred_file), apply Poisson calibration, 
+                                  and write to --out_file (or auto-named). 
+                                  Requires --pred_file to be an existing prediction output.
+                                  """).strip())
+
     predict_parser._action_groups.append(predict_optional)
 
     return predict_required, predict_optional

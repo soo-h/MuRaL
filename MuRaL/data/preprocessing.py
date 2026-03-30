@@ -432,6 +432,7 @@ def prepare_local_data(bed_regions, ref_genome, bw_files, bw_names, bw_radii, ce
     if len(bw_files) > 0 and seq_only == False:
         # Use the mean value of the region of 2*radius+1 bp around the focal site
         bw_data = get_mean_bw_for_bed(bw_files, bw_names, bw_radii, bed_regions)
+        bw_data.index = y.index
         data_local = pd.concat([local_seq_cat, bw_data, y, w], axis=1)
     else:
         data_local = pd.concat([local_seq_cat, y, w], axis=1)
@@ -893,8 +894,9 @@ class CombinedDatasetNP(Dataset):
 
         # Store the local seq data and label for later use
         self.model_type = model_type
-        valid_used_cols = output_col + ['sample_weight']
-        self.data_local = data[seq_cols + valid_used_cols]
+        self.valid_used_cols = output_col + ['sample_weight']
+        self.data_local = data[seq_cols + self.valid_used_cols]
+        self.seq_cols = seq_cols
         # Sample size
         #self.n = data.shape[0]# sample size
         self.n = data.index[-1][0] + 1# batch number
@@ -914,15 +916,16 @@ class CombinedDatasetNP(Dataset):
         self.cat_dims = [np.max(data[col]) + 1 for col in cat_cols]
         
         # Find the continuous columns
-        # self.cont_cols = [col for col in data.columns if col not in self.cat_cols + seq_cols + [output_col]]
-        self.cont_cols = [col for col in data.columns 
-                  if col not in self.cat_cols + seq_cols + valid_used_cols]
         
         # Assign the continuous data to cont_X
-        if self.cont_cols:
-            self.cont_X = data[self.cont_cols].astype(np.float32).values
-        else:
-            self.cont_X = np.zeros((self.n, 1)) 
+        self.cont_X = self._get_continuous_data(data, self.valid_used_cols)
+
+        # self.cont_cols = [col for col in data.columns 
+                #   if col not in self.cat_cols + seq_cols + valid_used_cols]
+        # if self.cont_cols:
+        #     self.cont_X = data[self.cont_cols].astype(np.float32).values
+        # else:
+        #     self.cont_X = np.zeros((self.n, 1)) 
         
         # Assign the categorical data to cat_X
         if len(self.cat_cols) > 0:
@@ -964,24 +967,82 @@ class CombinedDatasetNP(Dataset):
         assert index < self.n
         seqs = iter(self.seqs_list[index])
         batch_distal = distal_encoding_by_region(seqs, self.batch_shape[index], self.distal_radius,self.records, model_type=self.model_type)
-        #assert np.sum(self.y.loc[index] == label) == len(label)
+
+        if (hasattr(self, 'segment_regions') and self.bw_fh 
+            and not self.seq_only and not self.without_bw_distal):
+            bw_distal = get_bw_distal_for_segment_cached(
+                self.bw_fh, self.segment_regions[index],
+                self.distal_radius, model_type=self.model_type
+                )
+            batch_distal = np.concatenate([batch_distal, bw_distal], axis=1)
         
-        # return self.y.loc[index].values.reshape(-1, 1), self.cont_X[index], self.cat_X.loc[index].values, batch_distal
         return self.y.loc[index].values.reshape(-1, 1), \
-            self.cont_X[index], \
+            self.cont_X.loc[index].values, \
                 self.cat_X.loc[index].values, \
                     batch_distal, \
                         self.w.loc[index].values.reshape(-1, 1)
 
     def get_distal_encoding_infomation(self):
         self.seqs_list,self.batch_shape = get_distal_seqs_by_region(self.bed_regions, self.records, self.distal_radius, self.central_radius, self.model_type)
+
+        # Cache segment regions for bw extraction
+        if self.bw_fh and not self.seq_only and not self.without_bw_distal:
+            self.segment_regions = []
+            bed_generator = bed_reader(self.bed_regions, self.central_radius)
+            for batch, strand in bed_generator:
+                self.segment_regions.append([
+                    (str(r.chrom), r.start, r.stop, strand) for r in batch
+                    ])
         self.distal_info = True
+
+    def _get_continuous_data(self, data, valid_used_cols):
+        """Extract continuous features."""
+        self.cont_cols = [col for col in data.columns if col not in self.cat_cols + self.seq_cols + valid_used_cols]
+        return data[self.cont_cols].astype(np.float32) if self.cont_cols else np.zeros((self.n, 1))
         
     def get_labels(self): 
         return np.squeeze(self.y)
     
     def _get_labels(self, dataset, idx):
         return dataset.__getitem__(idx)[1]
+
+
+def get_bw_distal_for_segment_cached(bw_fh, segment_regions,
+                                      distal_radius, model_type='snv'):
+    window_size = calc_window_size(distal_radius, local_order=1, model_type=model_type)
+    n_sites = len(segment_regions)
+    n_bw = len(bw_fh)
+    bw_distal = np.zeros((n_sites, n_bw, window_size), dtype=np.float32)
+
+    for i, (chrom, start, stop, strand) in enumerate(segment_regions):
+        exp_start, exp_stop = get_expanded_region(start, stop, distal_radius,
+                                                   model_type=model_type)
+
+        for j, bw in enumerate(bw_fh):
+            chrom_len = bw.chroms(chrom)
+
+            # Boundary clamp + padding (same logic as seq_ohe_encoder)
+            fetch_start = max(exp_start, 0)
+            fetch_stop = min(exp_stop, chrom_len)
+            left_pad = fetch_start - exp_start   # >0 if exp_start was negative
+            right_pad = exp_stop - fetch_stop     # >0 if exp_stop exceeded chrom
+
+            bw_values = np.nan_to_num(
+                bw.values(chrom, fetch_start, fetch_stop, numpy=True)
+            ).astype(np.float32)
+
+            # Pad boundaries with 0 (analogous to 'N' padding in sequence)
+            if left_pad > 0:
+                bw_values = np.concatenate([np.zeros(left_pad, dtype=np.float32), bw_values])
+            if right_pad > 0:
+                bw_values = np.concatenate([bw_values, np.zeros(right_pad, dtype=np.float32)])
+
+            if strand == '-':
+                bw_values = np.flip(bw_values).copy()
+
+            bw_distal[i, j, :] = bw_values[:window_size]
+
+    return bw_distal
     
 def get_distal_seqs_by_region(bed_regions, seq_records, radius, central_bp, model_type):
     seqs_list = []
@@ -1234,12 +1295,13 @@ class Create_DatasetSegment(Dataset):
         """
         
         self.y = torch.cat([batch[0].squeeze(0) for batch in data_batch])
+        self.cont_X = torch.cat([torch.tensor(batch[1]).squeeze(0) for batch in data_batch])
         self.cat_X = torch.cat([batch[2].squeeze(0) for batch in data_batch])
         self.distal_x = torch.cat([batch[3].squeeze(0) for batch in data_batch])
         self.w = torch.cat([batch[4].squeeze(0) for batch in data_batch])
         
         self.n = self.y.shape[0]
-        self.cont_X = np.zeros((self.n, 1))  
+        # self.cont_X = np.zeros((self.n, 1))  
     def __len__(self):
         """ Denote the total number of samples. """
         return self.n
@@ -1256,5 +1318,5 @@ class Create_DatasetSegment(Dataset):
         self.distal_x = torch.cat([distal_x, self.distal_x])
 
         self.n = self.y.shape[0]
-        self.cont_X = np.zeros((self.n, 1))  
+        self.cont_X = torch.cat([cont_x, self.cont_X])
         self.w = torch.cat([w, self.w])

@@ -19,6 +19,7 @@ import numpy as np
 
 from MuRaL.data.preprocessing import get_expanded_region
 from MuRaL.utils.info_utils import parse_pred_header, read_pred_line
+from MuRaL.evaluation.obs_pred_aggregator import KmerMutSaver
 from typing import Dict, Any
 
 def parse_arguments():
@@ -46,22 +47,25 @@ def parse_arguments():
 # ----------------------
 # Core Data Structures
 # ----------------------
-class KmerMutSaver:
-    def __init__(self, n_class):
-        self.n_class = n_class
-        self.kmer_mut_obs = {}
-        self.kmer_mut_pred = {}
+# class KmerMutSaver:
+#     def __init__(self, n_class):
+#         self.n_class = n_class
+#         self.kmer_mut_obs = {}
+#         self.kmer_mut_pred = {}
+#         self.kmer_site_count = {} # site count per region
     
-    def add_obs(self, kmer, mut_type, count=1):
-        if kmer not in self.kmer_mut_obs:
-            self.kmer_mut_obs[kmer] = np.zeros(self.n_class)
-        self.kmer_mut_obs[kmer][mut_type] += count
+#     def add_obs(self, kmer, mut_type, count=1):
+#         if kmer not in self.kmer_mut_obs:
+#             self.kmer_mut_obs[kmer] = np.zeros(self.n_class)
+#             self.kmer_site_count[kmer] = 0
+#         self.kmer_mut_obs[kmer][mut_type] += count
+#         self.kmer_site_count[kmer] += 1
     
-    def add_pred(self, kmer, probs):
-        if kmer not in self.kmer_mut_pred:
-            self.kmer_mut_pred[kmer] = np.zeros(self.n_class)
-        for i in range(self.n_class):
-            self.kmer_mut_pred[kmer][i] += probs[i]
+#     def add_pred(self, kmer, probs):
+#         if kmer not in self.kmer_mut_pred:
+#             self.kmer_mut_pred[kmer] = np.zeros(self.n_class)
+#         for i in range(self.n_class):
+#             self.kmer_mut_pred[kmer][i] += probs[i]
 
 
 
@@ -139,17 +143,16 @@ def calculate_mutation_rates(kmer_saver: Any) -> pd.DataFrame:
     pred_cols = [f"avg_pred_rate{i}" for i in mutation_classes]
     count_cols = [f"number_of_mut{i}" for i in mutation_classes]
     
-    # Process data using dictionary comprehension
-    results = {
-        kmer: np.concatenate([
-            obs_counts[1:] / obs_counts.sum(),  # Normalized observed rates
-            kmer_saver.kmer_mut_pred[kmer][1:] / obs_counts.sum(),  # Normalized predicted rates
-            obs_counts[1:],  # Raw mutation counts
-            [obs_counts.sum()]  # Total counts
+    results = {}
+    for kmer, obs_counts in kmer_saver.obs.items():
+        n_sites = kmer_saver.site_count[kmer]
+        results[kmer] = np.concatenate([
+            obs_counts[1:] / n_sites,
+            kmer_saver.pred[kmer][1:] / n_sites,
+            obs_counts[1:],
+            [n_sites]
         ])
-        for kmer, obs_counts in kmer_saver.kmer_mut_obs.items()
-    }
-    
+
     # Create DataFrame with proper typing
     results = (
         pd.DataFrame.from_dict(results, orient='index', columns=rate_cols + pred_cols + count_cols + ['number_of_all'])

@@ -216,7 +216,7 @@ def model_choice(model_no, config, common_model_config, model_type):
 
     # model registry
     MODEL_REGISTRY = {
-        'snv': {0: Network0, 1: Network1, 2: Network2},
+        'snv': {0: Network0, 1: Network1, 2: Network2, 3: Network3},
         'indel': {0: UNet_Small}
     }
 

@@ -12,6 +12,7 @@ from scipy.stats import pearsonr
 from typing import Dict, Tuple, Any
 
 from MuRaL.utils.info_utils import parse_pred_header, read_pred_line
+from MuRaL.evaluation.obs_pred_aggregator import RegionMutSaver
 
 
 def parse_arguments(parser):
@@ -22,24 +23,6 @@ def parse_arguments(parser):
     parser.add_argument('--out_prefix', type=str, help='name prefix for output files storing regional mutation rates and correlations')
     args = parser.parse_args()
     return args
-
-class RegionMutSaver:
-    def __init__(self, n_class):
-        self.n_class = n_class
-        self.region_mut_obs = {}
-        self.region_mut_pred = {}
-    
-    def add_obs(self, region, mut_type, count=1):
-        if region not in self.region_mut_obs:
-            self.region_mut_obs[region] = np.zeros(self.n_class)
-        self.region_mut_obs[region][mut_type] += count
-    
-    def add_pred(self, region, probs):
-        if region not in self.region_mut_pred:
-            self.region_mut_pred[region] = np.zeros(self.n_class)
-        for i in range(self.n_class):
-            self.region_mut_pred[region][i] += probs[i]
-
 
 def filt_region(df: DataFrame, ratio_cutoff: float) -> DataFrame:
     """
@@ -111,16 +94,16 @@ def calculate_mutation_rates(region_mut_saver: Any) -> pd.DataFrame:
     data = []
     
     # Process each genomic region
-    for (chrom, window_end), obs_counts in region_mut_saver.region_mut_obs.items():
-        total = obs_counts.sum()
+    for (chrom, window_end), obs_counts in region_mut_saver.obs.items():
+        n_sites = region_mut_saver.site_count[(chrom, window_end)]
         chroms.append(chrom)
         window_ends.append(window_end)
         
         data.append(np.concatenate([
-            obs_counts[1:] / total,  # Normalized observed rates
-            region_mut_saver.region_mut_pred[(chrom, window_end)][1:] / total,  # Normalized predicted rates
+            obs_counts[1:] / n_sites,  # Normalized observed rates
+            region_mut_saver.pred[(chrom, window_end)][1:] / n_sites,  # Normalized predicted rates
             obs_counts[1:],  # Raw mutation counts
-            [total]  # Total counts
+            [n_sites]  # Total site count
         ]))
     
     # Create DataFrame
