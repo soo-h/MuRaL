@@ -285,8 +285,9 @@ Recurrent mutation BED format
 When analyzing recurrent mutations (sites mutated multiple times across
 individuals), use the ``--recurrent`` flag during training, prediction
 and evaluation. In this mode, the 4th column (name field) of the BED
-file encodes per-site information in a semicolon-separated format, where
-the last field is the observed mutation count:
+file encodes per-site information in a semicolon-separated format:
+``chrom:start;ref>alt;AC;count``, where AC is the allele count (integer;
+-1 if unavailable) and the last field is the observed mutation count:
 
 .. code-block:: text
 

@@ -277,10 +277,10 @@ def add_snv_eval_parser(subparsers: argparse._SubParsersAction) -> argparse._Sub
         Enable recurrent mutation mode for evaluation. When set, observed
         mutation counts are derived from the per-site count field (last
         field in the BED name column, e.g. 'chr1:238329;G>A;-1;3' where
-        3 is the count) instead of treating each mutated site as a single
-        event. This affects k-mer and regional correlation calculations:
-        observed rates will reflect the actual number of independent
-        mutation events rather than binary presence/absence.
+        -1 is AC and 3 is the count) instead of treating each mutated
+        site as a single event. This affects k-mer and regional correlation
+        calculations: observed rates will reflect the actual number of
+        independent mutation events rather than binary presence/absence.
     """).strip())
 
     return eval_parser

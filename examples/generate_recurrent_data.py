@@ -3,10 +3,10 @@
 
 This script converts standard MuRaL BED files to the recurrent mutation format
 where the 4th column (name) encodes per-site information in a semicolon-separated
-format: 'chrom:start;ref>alt;strand;count'.
+format: 'chrom:start;ref>alt;AC;count', where AC is the allele count (integer;
+-1 if unavailable) and the last field is the observed mutation count.
 """
 import random
-import sys
 
 COMPLEMENTS = {'A': 'T', 'T': 'A', 'C': 'G', 'G': 'C', 'N': 'N'}
 
@@ -22,8 +22,10 @@ def generate_recurrent_bed(input_bed, output_bed, seq_dict, max_count=5, recurre
 
     For mutated sites (score != 0), assign a random count >= 1.
     For non-mutated sites (score == 0), name stays as '.'.
+    Format: chrom:start;ref>alt;AC;count  (AC set to -1 as unavailable for synthetic data)
     """
-    mut_type_map = {1: 'A>C', 2: 'A>G', 3: 'A>T'}
+    mut_type_map_at = {1: 'A>C', 2: 'A>G', 3: 'A>T'}
+    mut_type_map_cg = {1: 'C>A', 2: 'C>G', 3: 'C>T'}
     random.seed(42)
 
     with open(input_bed) as fin, open(output_bed, 'w') as fout:
@@ -33,15 +35,17 @@ def generate_recurrent_bed(input_bed, output_bed, seq_dict, max_count=5, recurre
             score = int(score)
 
             if score == 0:
-                # Non-mutated site
                 new_name = '.'
             else:
-                # Mutated site: assign recurrent count
                 ref = get_ref_base(seq_dict, chrom, int(start))
+
+                if strand == '-':
+                    ref = COMPLEMENTS.get(ref, 'N')
+
                 if ref in ('A', 'T'):
-                    mut_type = mut_type_map.get(score, 'A>C')
+                    mut_type = mut_type_map_at.get(score, 'A>C')
                 elif ref in ('C', 'G'):
-                    mut_type = mut_type_map.get(score, 'A>C').replace('A', 'C').replace('T', 'G')
+                    mut_type = mut_type_map_cg.get(score, 'C>A')
                 else:
                     mut_type = 'N>N'
 
@@ -50,8 +54,7 @@ def generate_recurrent_bed(input_bed, output_bed, seq_dict, max_count=5, recurre
                 else:
                     count = 1
 
-                strand_val = '-1' if strand == '-' else '1'
-                new_name = f'{chrom}:{start};{mut_type};{strand_val};{count}'
+                new_name = f'{chrom}:{start};{mut_type};-1;{count}'
 
             fout.write(f'{chrom}\t{start}\t{end}\t{new_name}\t{score}\t{strand}\n')
 

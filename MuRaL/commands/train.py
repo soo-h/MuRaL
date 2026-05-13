@@ -86,10 +86,10 @@ def add_common_train_parser(
                         help=textwrap.dedent("""
                         Enable recurrent mutation mode for training. When set, per-site
                         mutation counts (from the last semicolon-separated field in the
-                        BED name column, e.g. 'chr1:238329;G>A;-1;3' where 3 is the
-                        count) are used as sample weights in the cross-entropy loss.
-                        Non-mutated sites (name='.') are assigned a weight of 1.
-                        Default: False.""").strip())
+                        BED name column, e.g. 'chr1:238329;G>A;-1;3' where -1 is AC
+                        and 3 is the count) are used as sample weights in the
+                        cross-entropy loss. Non-mutated sites (name='.') are assigned
+                        a weight of 1. Default: False.""").strip())
     
     model_args.add_argument('--distal_order', type=int, metavar='INT', default=1, 
                           help=textwrap.dedent("""
@@ -301,8 +301,9 @@ def add_indel_train_parser(subparsers: argparse._SubParsersAction) -> argparse._
     When analyzing recurrent mutations (sites mutated multiple times across
     individuals), use the --recurrent flag. In this mode, the 4th column
     (name field) of the BED file encodes per-site information in a
-    semicolon-separated format, where the last field is the observed
-    mutation count:
+    semicolon-separated format: 'chrom:start;ref>alt;AC;count',
+    where AC is the allele count (integer; -1 if unavailable) and the
+    last field is the observed mutation count.
 
     chr1    238329  238330  chr1:238329;G>A;-1;3   1   +
     chr1    238331  238332  chr1:238331;G>A;-1;1   1   -
@@ -497,8 +498,9 @@ def add_snv_train_parser(subparsers: argparse._SubParsersAction) -> argparse._Su
     When analyzing recurrent mutations (sites mutated multiple times across
     individuals), use the --recurrent flag. In this mode, the 4th column
     (name field) of the BED file encodes per-site information in a
-    semicolon-separated format, where the last field is the observed
-    mutation count:
+    semicolon-separated format: 'chrom:start;ref>alt;AC;count',
+    where AC is the allele count (integer; -1 if unavailable) and the
+    last field is the observed mutation count.
 
     chr1    238329  238330  chr1:238329;G>A;-1;3   1   +
     chr1    238331  238332  chr1:238331;G>A;-1;1   1   -

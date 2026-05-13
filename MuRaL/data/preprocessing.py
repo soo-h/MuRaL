@@ -761,7 +761,7 @@ def get_label(bed_regions):
 
 def get_weight(bed_regions):
     """Extract per-site count from BED name field (col4).
-    Format: 'chr1:238329;G>A;-1;1' — last field after ';' is count.
+    Format: 'chr1:12345;A>G;AC;3' — last field after ';' is count.
     Non-mutated sites have name='.' → weight=1.0
     """
     weights = []
