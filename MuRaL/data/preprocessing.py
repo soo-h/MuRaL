@@ -998,7 +998,14 @@ class CombinedDatasetNP(Dataset):
     def _get_continuous_data(self, data, valid_used_cols):
         """Extract continuous features."""
         self.cont_cols = [col for col in data.columns if col not in self.cat_cols + self.seq_cols + valid_used_cols]
-        return data[self.cont_cols].astype(np.float32) if self.cont_cols else np.zeros((self.n, 1))
+        if self.cont_cols:
+            return data[self.cont_cols].astype(np.float32)
+        else:
+            return pd.DataFrame(
+                np.zeros((len(data), 1), dtype=np.float32),
+                columns=['placeholder'],
+                index=data.index  
+            )
         
     def get_labels(self): 
         return np.squeeze(self.y)

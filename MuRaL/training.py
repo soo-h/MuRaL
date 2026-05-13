@@ -40,7 +40,6 @@ from MuRaL.data.preprocessing import *
 from MuRaL.model.calibration import poisson_calibrate
 
 
-
 #from torchsampler import ImbalancedDatasetSampler
 def train(config, args, model_type, checkpoint_dir=None):
     """
@@ -53,15 +52,12 @@ def train(config, args, model_type, checkpoint_dir=None):
     """
     
     # Ensure output can be viewed in real-time in a distributed environment
-    if args.use_ray:
-        print = get_printer(args.use_ray, None)
-    else:
+    if not args.use_ray:
         print = get_printer(args.use_ray, args.trial_training_log)
         trial_dir = args.trial_dir
 
-
-    print("torch._C._cuda_getDeviceCount():", torch._C._cuda_getDeviceCount())
-    print("torch.cuda.device_count(): ", torch.cuda.device_count())
+    torch_backend_manager = TorchBackendManager(dynamic_input_size=args.cudnn_benchmark_false, printer=print)
+    torch_backend_manager.set_torch_backends()
 
     # Get parameters from the command line
     train_file = args.train_data # Ray requires absolute paths
@@ -621,3 +617,30 @@ def get_save_path(use_ray, trial_dir, epoch):
         os.makedirs(non_ray_checkpoint_dir, exist_ok=True)
         path = os.path.join(non_ray_checkpoint_dir, 'model')
     return path
+
+class TorchBackendManager:
+    def __init__(self, use_dilation=False, dynamic_input_size=False, printer=None):
+        self.use_dilation = use_dilation
+        self.benchmark_enable = not dynamic_input_size
+        self.printer = printer or print
+        self.display_torch_device_info()
+
+    def set_torch_backends(self):
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
+        torch.backends.cudnn.benchmark = self.benchmark_enable
+        torch.backends.cudnn.deterministic = self.use_dilation 
+        self.display_torch_backends_info()
+
+    def display_torch_backends_info(self):
+        settings = {
+            "TF32 Matmul": torch.backends.cuda.matmul.allow_tf32,
+            "CUDNN Benchmark": torch.backends.cudnn.benchmark,
+            "CUDNN TF32": torch.backends.cudnn.allow_tf32,
+            "CUDNN Deterministic": torch.backends.cudnn.deterministic,
+        }
+        for name, value in settings.items():
+            self.printer(f"{name}: {value}")
+
+    def display_torch_device_info(self):
+        self.printer(f"CUDA devices: {torch.cuda.device_count()}")
