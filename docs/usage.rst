@@ -147,7 +147,7 @@ Installation Process
    mural_snv train -v  # Should display version number
 
 Using Singularity
-----------------
+-----------------
 
 Singularity is a popular container platform for scientific research. We
 also built Singularity images for specific versions, which can be found
@@ -803,7 +803,7 @@ for A>C, A>G and A>T, respectively).
 
 
 Example 7 : k-mer correlation commands
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 MuRaL-snv
 ^^^^^^^^^^
@@ -1180,10 +1180,10 @@ Trained models and predicted mutation rate maps of multiple species
 MuRaL-snv
 -------------
 
-Trained models (by MuRaL v1.0.0) for four species - *Homo sapiens*, *Macaca mulatta*, 
-*Arabidopsis thaliana* and *Drosophila melanogaster* are provided in 
-the 'models/*/SNV' folder of the package. One can use these model files 
-for prediction or transfer learning.
+Trained models (by MuRaL v1.0.0) for four species - *Homo sapiens*,
+*Macaca mulatta*, *Arabidopsis thaliana* and *Drosophila melanogaster*
+are provided in the 'models/*/SNV' folder of the package. One can use
+these model files for prediction or transfer learning.
 
 Predicted single-nucleotide mutation rate maps (by MuRaL v1.0.0) for these genomes are
 available at `ScienceDB <https://www.doi.org/10.11922/sciencedb.01173>`__.
@@ -1191,10 +1191,10 @@ available at `ScienceDB <https://www.doi.org/10.11922/sciencedb.01173>`__.
 MuRaL-indel
 -------------
 
-Trained models (by MuRaL v1.2.0) for four species - *Homo sapiens*, *Macaca mulatta*, 
-*Arabidopsis thaliana* and *Drosophila melanogaster* are provided in 
-the 'models/*/INDEL' folder of the package. One can use these model files 
-for prediction or transfer learning.
+Trained models (by MuRaL v1.2.0) for four species - *Homo sapiens*,
+*Macaca mulatta*, *Arabidopsis thaliana* and *Drosophila melanogaster*
+are provided in the 'models/*/INDEL' folder of the package. One can use
+these model files for prediction or transfer learning.
 
 Predicted base-resolution INDEL mutation rate maps (by MuRaL v1.2.0) for these genomes are
 available at `ScienceDB <https://doi.org/10.57760/sciencedb.30830>`__.
@@ -1206,8 +1206,8 @@ Fang Y, Deng S, Li C. A generalizable deep learning framework for inferring
 fine-scale germline mutation rate maps. *Nature Machine Intelligence* (2022)
 `doi:10.1038/s42256-022-00574-5 <https://doi.org/10.1038/s42256-022-00574-5>`__
 
-Deng S, Song H, Li C. A deep learning framework for building INDEL mutation rate maps. *bioRxiv* (2025) 
-`doi:10.1101/2025.11.18.689146 <https://doi.org/10.1101/2025.11.18.689146>`
+Deng S, Song H, Li C. A deep learning framework for building INDEL mutation rate maps. *Briefings in Bioinformatics* (2025) 
+`doi:10.1093/bib/bbag212 <https://doi.org/10.1093/bib/bbag212>`
 
 Contact
 =============
