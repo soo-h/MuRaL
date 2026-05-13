@@ -106,10 +106,12 @@ def add_common_predict_parser(
                                   e.g., "10000 50000". Default: no value.
                                   """ ).strip())
 
-    predict_optional.add_argument('--recurrent', default=False, action='store_true',  
+    predict_optional.add_argument('--recurrent', default=False, action='store_true',
                                   help=textwrap.dedent("""
-                                  Calculate correlation used recurrent mutation.
-                                  """).strip())
+                                  Enable recurrent mutation mode for prediction. When set,
+                                  k-mer and regional correlation calculations use observed
+                                  mutation counts (from the BED name column) instead of
+                                  binary presence/absence. Default: False.""").strip())
 
     predict_optional.add_argument('--poisson_calib_only', default=False, 
                                   action='store_true',
@@ -182,6 +184,17 @@ def add_indel_predict_parser(subparsers: argparse._SubParsersAction) -> None:
         --pred_file testing.ckpt9.fdiri.tsv.gz \\
         --cpu_only \\
         > test.out 2> test.err
+
+    2. For recurrent mutation data, add --recurrent flag so that correlation
+    calculations use observed mutation counts instead of binary presence/absence.
+
+        mural_indel predict --ref_genome data/seq.fa --test_data data/recurrent_validation.sorted.bed \\
+        --model_path models/checkpoint_9/model \\
+        --model_config_path models/checkpoint_9/model.config.pkl \\
+        --calibrator_path models/checkpoint_9/model.fdiri_cal.pkl \\
+        --pred_file testing.ckpt9.fdiri.tsv.gz \\
+        --recurrent --cpu_only \\
+        > test.out 2> test.err
     """)
 
     # Register common arguments
@@ -244,6 +257,17 @@ def add_snv_predict_parser(subparsers: argparse._SubParsersAction) -> None:
         --calibrator_path models/checkpoint_6/model.fdiri_cal.pkl \\
         --pred_file models/testing.ckpt6.fdiri.tsv.gz \\
         --cpu_only \\
+        > test.out 2> test.err
+
+    2. For recurrent mutation data, add --recurrent flag so that correlation
+    calculations use observed mutation counts instead of binary presence/absence.
+
+        mural_snv predict --ref_genome data/seq.fa --test_data data/recurrent_validation.sorted.bed \\
+        --model_path models/checkpoint_6/model \\
+        --model_config_path models/checkpoint_6/model.config.pkl \\
+        --calibrator_path models/checkpoint_6/model.fdiri_cal.pkl \\
+        --pred_file models/testing.ckpt6.fdiri.tsv.gz \\
+        --recurrent --cpu_only \\
         > test.out 2> test.err
     """)
     # Register common arguments

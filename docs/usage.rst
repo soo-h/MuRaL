@@ -279,6 +279,29 @@ testing datasets. Importantly, the training and validation BED file **MUST
 BE SORTED** by chromosome coordinates. You can sort BED files by
 ``bedtools sort`` or ``sort -k1,1 -k2,2n``.
 
+Recurrent mutation BED format
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+When analyzing recurrent mutations (sites mutated multiple times across
+individuals), use the ``--recurrent`` flag during training, prediction
+and evaluation. In this mode, the 4th column (name field) of the BED
+file encodes per-site information in a semicolon-separated format, where
+the last field is the observed mutation count:
+
+.. code-block:: text
+
+    chr1    238329  238330  chr1:238329;G>A;-1;3   1   +
+    chr1    238331  238332  chr1:238331;G>A;-1;1   1   -
+    chr1    238335  238336  .                       0   +
+
+In the example above, the site at chr1:238329 has 3 independent mutation
+events (count=3), while chr1:238331 has 1 event. Non-mutated sites use
+``.`` as the name field and are assigned a weight of 1.
+
+During training with ``--recurrent``, per-site counts are used as sample
+weights in the cross-entropy loss, so sites with more independent
+mutations contribute proportionally more to the gradient.
+
 Output data
 ~~~~~~~~~~~~~~~~
 
@@ -463,21 +486,21 @@ The following example demonstrates using 3 extra CPUs to accelerate data loading
 Example 4: Training with limited resources
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-If RAM memory or GPU memory limits the usage of ``mural_snv train`` or ``mural_indel train`` (which may happen with large 
+If RAM memory or GPU memory limits the usage of ``mural_snv train`` or ``mural_indel train`` (which may happen with large
 expanded sequences used for training), please refer to following suggestions.
 
-Since v1.1.2, we split the genomes into segments of a spefic size to facilitate data preprocessing (see illustration in the panel A of the figure below). 
+Since v1.1.2, we split the genomes into segments of a spefic size to facilitate data preprocessing (see illustration in the panel A of the figure below).
 
-To reduce RAM memory, you can set smaller values for ``--segment_center`` and ``--sampled_segments``. 
-The default value of ``--segment_center`` is 300,000 bp, meaning maximum encoding unit of the 
-sequence is 300000+2*distal_radius bp (see illustration in the panel A of the figure below). It is the key parameter 
-for trade-off between RAM memory usage and data preprocessing speed. You can reduce this 
-(e.g., 50,000 bp) at the cost of an acceptable loss in data preprocessing speed. 
-The second option is to set smaller value for ``--sampled_segments`` (default 10). If changing this, you should also 
-check the performance of trained model, because ``--sampled_segments`` may also influence model performance 
+To reduce RAM memory, you can set smaller values for ``--segment_center`` and ``--sampled_segments``.
+The default value of ``--segment_center`` is 300,000 bp, meaning maximum encoding unit of the
+sequence is 300000+2*distal_radius bp (see illustration in the panel A of the figure below). It is the key parameter
+for trade-off between RAM memory usage and data preprocessing speed. You can reduce this
+(e.g., 50,000 bp) at the cost of an acceptable loss in data preprocessing speed.
+The second option is to set smaller value for ``--sampled_segments`` (default 10). If changing this, you should also
+check the performance of trained model, because ``--sampled_segments`` may also influence model performance
 sometimes. The impact of the two parameters on RAM usage can be visualized in the following figure (panels B & C):
 
-.. image:: images/preprocessAndRAM_memory_usage.jpg 
+.. image:: images/preprocessAndRAM_memory_usage.jpg
       :width: 830px
 
 To reduce GPU memory, it is recommended to reduce ``--batch_size`` (default 128). You can set smaller values (e.g., 64, 32, 16, etc.).
@@ -489,7 +512,7 @@ MuRaL-snv
 ^^^^^^^^^^
 
 .. code-block:: bash
-     
+
    # use less RAM memory
    mural_snv train --ref_genome snv/data/seq.fa \
               --train_data snv/data/training.sorted.bed \
@@ -512,7 +535,7 @@ MuRaL-indel
 ^^^^^^^^^^^^
 
 .. code-block:: bash
-     
+
    # use less RAM memory
    mural_indel train --ref_genome indel/data/seq.fa \
               --train_data indel/data/training.sorted.bed \
@@ -533,15 +556,37 @@ MuRaL-indel
 
 .. note::
   The RAM memory usage can be estimated as:
-  ``sampled_segments * segment_center * 4 * (2 * distal_radius + 1) * 4 / 2^30 + C`` (GB) 
+  ``sampled_segments * segment_center * 4 * (2 * distal_radius + 1) * 4 / 2^30 + C`` (GB)
 
-  where: 
+  where:
 
   * ``C`` is a constant term ranging between 5 and 12 GB;
-  * ``seq_length`` is (2 * distal_radius + 1) for SNV, 
-  * ``seq_length`` is (2 * distal_radius) for INDEL, 
+  * ``seq_length`` is (2 * distal_radius + 1) for SNV,
+  * ``seq_length`` is (2 * distal_radius) for INDEL,
 
   When experiencing insufficient RAM, this formula helps determine appropriate parameter values.
+
+Example 4b: Training with recurrent mutations
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+When training on recurrent mutation data (where the same genomic site may
+be mutated independently in multiple individuals), add the ``--recurrent``
+flag. This uses per-site mutation counts as sample weights in the loss
+function, ensuring that sites with more independent mutation events
+contribute proportionally to training.
+
+.. code-block:: bash
+
+   mural_snv train --ref_genome snv/data/seq.fa \
+              --train_data snv/data/recurrent_training.sorted.bed \
+              --validation_data snv/data/recurrent_validation.sorted.bed \
+              --recurrent --n_trials 2 --experiment_name example4b \
+              > test4b.out 2> test4b.err
+
+.. note::
+  The recurrent mutation BED files in the example directory are synthetic
+  data generated from the standard training/validation files via
+  ``generate_recurrent_data.py``. They are for demonstration purposes only.
 
 Model prediction
 ------------------
@@ -596,7 +641,7 @@ Example 5: Mutation Rate Prediction
 MuRaL-snv
 ^^^^^^^^^^
 
-Predicts mutation rates for sites in 'snv/data/testing.bed.gz' 
+Predicts mutation rates for sites in 'snv/data/testing.bed.gz'
 using model from 'snv/models/checkpoint_6/':
 
 .. code-block:: bash
@@ -607,6 +652,19 @@ using model from 'snv/models/checkpoint_6/':
                     --calibrator_path snv/models/checkpoint_6/model.fdiri_cal.pkl \
                     --pred_file testing.ckpt6.fdiri.tsv.gz \
                     --cpu_only > test5.out 2> test5.err
+
+For recurrent mutation data, add ``--recurrent`` so that correlation
+calculations use observed mutation counts instead of binary
+presence/absence:
+
+.. code-block:: bash
+
+ mural_snv predict --ref_genome snv/data/seq.fa --test_data snv/data/recurrent_validation.sorted.bed \
+                    --model_path snv/models/checkpoint_6/model \
+                    --model_config_path snv/models/checkpoint_6/model.config.pkl \
+                    --calibrator_path snv/models/checkpoint_6/model.fdiri_cal.pkl \
+                    --pred_file testing.ckpt6.fdiri.tsv.gz \
+                    --recurrent --cpu_only > test5.out 2> test5.err
 
 MuRaL-indel
 ^^^^^^^^^^^^
@@ -750,7 +808,7 @@ Example 7 : k-mer correlation commands
 MuRaL-snv
 ^^^^^^^^^^
 
-The following commands use the prediction file 'testing.ckpt4.fdiri.tsv.gz' 
+The following commands use the prediction file 'testing.ckpt4.fdiri.tsv.gz'
 to calculate 3-mer, 5-mer and 7-mer correlations:
 
 .. code-block:: bash
@@ -758,6 +816,14 @@ to calculate 3-mer, 5-mer and 7-mer correlations:
  mural_snv evaluate --pred_file testing.ckpt4.fdiri.tsv.gz --ref_genome snv/data/seq.fa --kmer_length 3 --kmer_only --out_prefix test_kmer_corr
  mural_snv evaluate --pred_file testing.ckpt4.fdiri.tsv.gz --ref_genome snv/data/seq.fa --kmer_length 5 --kmer_only --out_prefix test_kmer_corr
  mural_snv evaluate --pred_file testing.ckpt4.fdiri.tsv.gz --ref_genome snv/data/seq.fa --kmer_length 7 --kmer_only --out_prefix test_kmer_corr
+
+For recurrent mutation data, add ``--recurrent`` so that observed rates
+reflect the actual number of independent mutation events rather than
+binary presence/absence:
+
+.. code-block:: bash
+
+ mural_snv evaluate --pred_file testing.ckpt4.fdiri.tsv.gz --ref_genome snv/data/seq.fa --kmer_length 3 --kmer_only --recurrent --out_prefix test_kmer_corr
 
 MuRaL-indel
 ^^^^^^^^^^^^
@@ -814,11 +880,18 @@ Example 8: regional correlation commands
 MuRaL-snv
 ^^^^^^^^^^
 
-The following command will calculate the regional correlation for 100Kb windows. 
+The following command will calculate the regional correlation for 100Kb windows.
 
 .. code-block:: bash
 
  mural_snv evaluate --pred_file testing.ckpt4.fdiri.tsv.gz --window_size 100000 --regional_only --out_prefix test_region_corr
+
+With ``--recurrent``, observed counts reflect the number of independent
+mutation events per window:
+
+.. code-block:: bash
+
+ mural_snv evaluate --pred_file testing.ckpt4.fdiri.tsv.gz --window_size 100000 --regional_only --recurrent --out_prefix test_region_corr
 
 MuRaL-indel
 ^^^^^^^^^^^^

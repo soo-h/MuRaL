@@ -13,6 +13,8 @@ Germline mutation rates are important in genetics, genomics and evolutionary bio
 
 **MuRaL**, short for **Mu**tation **Ra**te **L**earner, is a generalizable deep learning framework to estimate base-resolution mutation rates maps.  We have developed two specialized tools for inferring mutation rates: **MuRaL-snv** (Fang et al., 2022) for single nucleotide variants (SNVs) and **MuRaL-indel** (Deng et al., 2025) for short insertions and deletions (INDELs). MuRaL has better predictive performance at different scales than current state-of-the-art methods. Moreover, it can generate genome-wide mutation rate maps with rare variants from a moderate number of sequenced individuals, and can leverage transfer learning to further reduce data and time requirements. It can be applied to many sequenced species with population polymorphism data.
 
+MuRaL supports **recurrent mutation** analysis, where the same genomic site may be mutated independently in multiple individuals. The ``--recurrent`` flag enables count-aware training (per-site weights in loss), prediction, and evaluations.
+
 The MuRaL-snv network architecture shown below has two main modules, one is for learning signals from local genomic regions (e.g. 10bp on each side of the focal nucleotide), the other for learning signals from expanded regions (e.g. 1Kb on each side of the focal nucleotide).
 
 <img src="./docs/images/model_schematic.jpg" alt="model schematic" width="830"/>
@@ -34,7 +36,7 @@ Predicted indel mutation rate maps for these genomes are available at [ScienceDB
 ### 4. Citation <a name="Citation"></a>
 Fang Y, Deng S, Li C. A generalizable deep learning framework for inferring fine-scale germline mutation rate maps. *Nature Machine Intelligence* (2022) [doi:10.1038/s42256-022-00574-5](https://doi.org/10.1038/s42256-022-00574-5)
 
-Deng S, Song H, Li C. A deep learning framework for building INDEL mutation rate maps. *bioRxiv* (2025) [doi:10.1101/2025.11.18.689146](https://doi.org/10.1101/2025.11.18.689146)
+Deng S, Song H, Li C. A deep learning framework for building INDEL mutation rate maps. *bioRxiv* (2025) [doi:10.1093/bib/bbag212](https://doi.org/10.1093/bib/bbag212)
 
 ### 5. Contact <a name="Contact"></a>
 For reporting issues or requests related to the package, please use GitHub Issues or write to mural-project@outlook.com.

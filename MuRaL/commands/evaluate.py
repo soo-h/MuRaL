@@ -217,6 +217,10 @@ def add_snv_eval_parser(subparsers: argparse._SubParsersAction) -> argparse._Sub
        mural_snv evaluate --pred_file testing.ckpt4.fdiri.tsv.gz --ref_genome data/seq.fa --kmer_length 5 --kmer_only --out_prefix test
        mural_snv evaluate --pred_file testing.ckpt4.fdiri.tsv.gz --ref_genome data/seq.fa --kmer_length 7 --kmer_only --out_prefix test
 
+      For recurrent mutation data, add --recurrent so that observed rates
+      reflect the actual number of independent mutation events:
+       mural_snv evaluate --pred_file testing.ckpt4.fdiri.tsv.gz --ref_genome data/seq.fa --kmer_length 3 --kmer_only --recurrent --out_prefix test
+
       Regional Correlation Analysis:
       -----------------------------
       Inputs required:
@@ -248,6 +252,10 @@ def add_snv_eval_parser(subparsers: argparse._SubParsersAction) -> argparse._Sub
       Command line examples
       ---------------------
        mural_snv evaluate --pred_file testing.ckpt4.fdiri.tsv.gz --window_size 100000 --regional_only --out_prefix test_region_corr
+
+      For recurrent mutation data, add --recurrent so that observed counts
+      reflect the number of independent mutation events per window:
+       mural_snv evaluate --pred_file testing.ckpt4.fdiri.tsv.gz --window_size 100000 --regional_only --recurrent --out_prefix test_region_corr
 
       """)
       )

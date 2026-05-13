@@ -83,7 +83,13 @@ def add_common_train_parser(
                           """ ).strip())
 
     data_args.add_argument('--recurrent', default=False, action='store_true',
-                        help='Use per-site sample weights from BED name field for loss weighting. Default: False.')
+                        help=textwrap.dedent("""
+                        Enable recurrent mutation mode for training. When set, per-site
+                        mutation counts (from the last semicolon-separated field in the
+                        BED name column, e.g. 'chr1:238329;G>A;-1;3' where 3 is the
+                        count) are used as sample weights in the cross-entropy loss.
+                        Non-mutated sites (name='.') are assigned a weight of 1.
+                        Default: False.""").strip())
     
     model_args.add_argument('--distal_order', type=int, metavar='INT', default=1, 
                           help=textwrap.dedent("""
@@ -289,7 +295,24 @@ def add_indel_train_parser(subparsers: argparse._SubParsersAction) -> argparse._
     
     Importantly, the training and validation BED file MUST be SORTED by chromosome
     coordinates. You can sort BED files by 'bedtools sort' or 'sort -k1,1 -k2,2n'.
-    
+
+    Recurrent mutation BED format
+    -----------------------------
+    When analyzing recurrent mutations (sites mutated multiple times across
+    individuals), use the --recurrent flag. In this mode, the 4th column
+    (name field) of the BED file encodes per-site information in a
+    semicolon-separated format, where the last field is the observed
+    mutation count:
+
+    chr1    238329  238330  chr1:238329;G>A;-1;3   1   +
+    chr1    238331  238332  chr1:238331;G>A;-1;1   1   -
+    chr1    238335  238336  .                       0   +
+
+    The site at chr1:238329 has 3 independent mutation events (count=3),
+    while chr1:238331 has 1 event. Non-mutated sites use '.' as the name
+    field and are assigned a weight of 1. During training with --recurrent,
+    per-site counts are used as sample weights in the cross-entropy loss.
+
     * Output data
     This tool saves the model information at each checkpoint, normally at the 
     end of each training epoch of each trial. 
@@ -370,7 +393,14 @@ def add_indel_train_parser(subparsers: argparse._SubParsersAction) -> argparse._
 
         mural_indel train --ref_genome data/seq.fa --train_data data/train.sorted.bed --n_trials 2 \\
 		--cpu_per_trial 4 --experiment_name example4 > test4.out 2> test4.err
-      
+
+    5. For recurrent mutation data, add --recurrent flag. Per-site mutation counts
+    from the BED name column are used as sample weights in the loss function.
+
+        mural_indel train --ref_genome data/seq.fa --train_data data/recurrent_training.sorted.bed \\
+        --validation_data data/recurrent_validation.sorted.bed \\
+        --recurrent --n_trials 2 --experiment_name example5 > test5.out 2> test5.err
+
     Notes
     -----
     1. The training and validation BED file MUST BE SORTED by chromosome 
@@ -461,7 +491,24 @@ def add_snv_train_parser(subparsers: argparse._SubParsersAction) -> argparse._Su
     
     Importantly, the training and validation BED file MUST be SORTED by chromosome
     coordinates. You can sort BED files by 'bedtools sort' or 'sort -k1,1 -k2,2n'.
-    
+
+    Recurrent mutation BED format
+    -----------------------------
+    When analyzing recurrent mutations (sites mutated multiple times across
+    individuals), use the --recurrent flag. In this mode, the 4th column
+    (name field) of the BED file encodes per-site information in a
+    semicolon-separated format, where the last field is the observed
+    mutation count:
+
+    chr1    238329  238330  chr1:238329;G>A;-1;3   1   +
+    chr1    238331  238332  chr1:238331;G>A;-1;1   1   -
+    chr1    238335  238336  .                       0   +
+
+    The site at chr1:238329 has 3 independent mutation events (count=3),
+    while chr1:238331 has 1 event. Non-mutated sites use '.' as the name
+    field and are assigned a weight of 1. During training with --recurrent,
+    per-site counts are used as sample weights in the cross-entropy loss.
+
     * Output data
     This tool saves the model information at each checkpoint, normally at the 
     end of each training epoch of each trial. 
@@ -542,7 +589,14 @@ def add_snv_train_parser(subparsers: argparse._SubParsersAction) -> argparse._Su
 
         mural_snv train --ref_genome data/seq.fa --train_data data/train.sorted.bed --n_trials 2 \\
 		--cpu_per_trial 4 --experiment_name example4 > test4.out 2> test4.err
-      
+
+    5. For recurrent mutation data, add --recurrent flag. Per-site mutation counts
+    from the BED name column are used as sample weights in the loss function.
+
+        mural_snv train --ref_genome data/seq.fa --train_data data/recurrent_training.sorted.bed \\
+        --validation_data data/recurrent_validation.sorted.bed \\
+        --recurrent --n_trials 2 --experiment_name example5 > test5.out 2> test5.err
+
     Notes
     -----
     1. The training and validation BED file MUST BE SORTED by chromosome 
