@@ -217,6 +217,10 @@ def add_snv_eval_parser(subparsers: argparse._SubParsersAction) -> argparse._Sub
        mural_snv evaluate --pred_file testing.ckpt4.fdiri.tsv.gz --ref_genome data/seq.fa --kmer_length 5 --kmer_only --out_prefix test
        mural_snv evaluate --pred_file testing.ckpt4.fdiri.tsv.gz --ref_genome data/seq.fa --kmer_length 7 --kmer_only --out_prefix test
 
+      For recurrent mutation data, add --recurrent so that observed rates
+      reflect the actual number of independent mutation events:
+       mural_snv evaluate --pred_file testing.ckpt4.fdiri.tsv.gz --ref_genome data/seq.fa --kmer_length 3 --kmer_only --recurrent --out_prefix test
+
       Regional Correlation Analysis:
       -----------------------------
       Inputs required:
@@ -249,6 +253,10 @@ def add_snv_eval_parser(subparsers: argparse._SubParsersAction) -> argparse._Sub
       ---------------------
        mural_snv evaluate --pred_file testing.ckpt4.fdiri.tsv.gz --window_size 100000 --regional_only --out_prefix test_region_corr
 
+      For recurrent mutation data, add --recurrent so that observed counts
+      reflect the number of independent mutation events per window:
+       mural_snv evaluate --pred_file testing.ckpt4.fdiri.tsv.gz --window_size 100000 --regional_only --recurrent --out_prefix test_region_corr
+
       """)
       )
 
@@ -263,6 +271,16 @@ def add_snv_eval_parser(subparsers: argparse._SubParsersAction) -> argparse._Sub
 
     eval_kmer_parser.add_argument('--motif_length', type=int, default=3, help=textwrap.dedent("""
         Length of k-mer used for evaluation (typically 3, 5, or 7). Default: 3.
+    """).strip())
+
+    eval_optional.add_argument('--recurrent', default=False, action='store_true', help=textwrap.dedent("""
+        Enable recurrent mutation mode for evaluation. When set, observed
+        mutation counts are derived from the per-site count field (last
+        field in the BED name column, e.g. 'chr1:238329;G>A;-1;3' where
+        -1 is AC and 3 is the count) instead of treating each mutated
+        site as a single event. This affects k-mer and regional correlation
+        calculations: observed rates will reflect the actual number of
+        independent mutation events rather than binary presence/absence.
     """).strip())
 
     return eval_parser

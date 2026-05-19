@@ -21,3 +21,29 @@ def poisson_calibrate(df_pred):
 
     df_calib['prob0'] = 1 - lambda_calib
     return df_calib
+
+def poisson_calibrate_file(pred_file):
+    """Apply Poisson calibration to an existing prediction file.
+    
+    Args:
+        pred_file: path to prediction TSV (gzipped or plain)
+    """
+    for ext in ['.tsv.gz', '.tsv']:
+         if pred_file.endswith(ext):
+            out_file = pred_file.replace(ext, f'.poisson_cal{ext}')
+            break
+    
+    print(f'Poisson calibration only mode')
+    print(f'  Input:  {pred_file}')
+    print(f'  Output: {out_file}')
+    
+    df = pd.read_csv(pred_file, sep='\t')
+    prob_cols = [c for c in df.columns if c.startswith('prob')]
+    
+    prob_df = poisson_calibrate(df[prob_cols])
+    df[prob_cols] = prob_df[prob_cols]
+    
+    compression = 'gzip' if out_file.endswith('.gz') else None
+    df.to_csv(out_file, sep='\t', index=False,
+              float_format='%.4g', compression=compression)
+    print(f'  Done.')

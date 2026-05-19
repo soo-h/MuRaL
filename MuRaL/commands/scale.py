@@ -271,3 +271,24 @@ def add_snv_calc_scaling_factor_parser(subparsers: argparse._SubParsersAction) -
 
     scale_required.add_argument('--n_class', type=int, default=4, 
                                 help='Number of mutation classes (or types), including the non-mutated class. Default: 4.')
+
+def add_snv_poisson_calib_parser(subparsers):
+    parser = subparsers.add_parser(
+        'poisson_calib',
+        help='Apply Poisson calibration to existing prediction files',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=textwrap.dedent("""
+        Apply Poisson calibration to prediction files produced by 
+        mural_snv predict. This converts softmax probabilities to 
+        Poisson rate parameters, which is useful for recurrent 
+        mutation analysis where observed counts may exceed 1.
+
+        Example:
+            mural_snv poisson_calib --pred_file predict.tsv.gz \\
+                --out_file predict.poisson_cal.tsv.gz
+        """))
+    
+    parser.set_defaults(func='poisson_calib')
+    parser.add_argument('--pred_file', required=True, type=str,
+                        help='Input prediction file (TSV, optionally gzipped)')
+    return parser

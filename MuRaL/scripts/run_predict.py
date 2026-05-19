@@ -52,7 +52,8 @@ def run_predict_pipline(args, model_type='snv'):
     model_path = args.model_path
     model_config_path = args.model_config_path
     calibrator_path = args.calibrator_path
-    
+
+    use_obs_count = args.recurrent   
     kmer_corr = args.kmer_corr
     region_corr = args.region_corr
 
@@ -226,18 +227,20 @@ def run_predict_pipline(args, model_type='snv'):
     
     print('Mean Loss, Total Loss, Test Size:', test_total_loss/test_size, test_total_loss, test_size)
     
-    # Combine data 
-    data_and_prob = pd.concat([data_local_test, y_prob], axis=1)         
+    # Combine data used kmer correlation
+    data_and_prob = pd.concat([data_local_test, y_prob], axis=1)
 
     # Write the prediction
-    test_pred_df = data_and_prob[['mut_type'] + prob_names]
     chr_pos = get_position_info(test_bed, segment_center)
-    pred_df = pd.concat((chr_pos, test_pred_df), axis=1)
-    pred_df.columns = ['chrom', 'start', 'end', 'strand', 'mut_type'] +  prob_names
+    assert (chr_pos['mut_type'].astype(int).values == 
+        data_and_prob['mut_type'].astype(int).values).all(), \
+            'ERROR: mut_type mismatch between position info and prediction data. ' \
+                'BED file or data pipeline may have inconsistent ordering.'
+    pred_df = pd.concat((chr_pos, y_prob), axis=1)
     pred_df.sort_values(['chrom', 'start'], inplace=True)
     pred_df.reset_index(drop=True, inplace=True)
     pred_df.to_csv(pred_file, sep='\t', float_format='%.4g', index=False)
-    
+
     #do k-mer evaluation
     if len(kmer_corr) > 0:
         modes = [i%2 for i in kmer_corr]
@@ -246,7 +249,7 @@ def run_predict_pipline(args, model_type='snv'):
             print('Warning: please provide odd positive mumbers for k-mer lengths', kmer_corr, '. No k-mer correlation was calculated.')
         else:
             for kmer in kmer_corr:
-                print(str(kmer)+'mer correlation: ', freq_kmer_comp_multi(data_and_prob, kmer, n_class))
+                print(str(kmer)+'mer correlation: ', freq_kmer_comp_multi(data_and_prob, kmer, n_class, use_obs_count))
    
     # Calculate regional correlations for a few window sizes
     #for win_size in [10000, 50000, 200000]:
@@ -257,7 +260,7 @@ def run_predict_pipline(args, model_type='snv'):
             pred_df.sort_values(['chrom', 'start'], inplace=True)
             
             for win_size in region_corr:
-                corr = corr_calc_sub(pred_df, win_size, prob_names)
+                corr = corr_calc_sub(pred_df, win_size, prob_names, use_obs_count)
                 print('regional corr:', str(win_size)+'bp', corr)
 
     print('Total time used: %s seconds' % (time.time() - start_time))

@@ -10,7 +10,7 @@ from .commands.train import add_snv_train_parser
 from .commands.predict import add_snv_predict_parser
 from .commands.transfer import add_snv_transfer_parser
 from .commands.evaluate import add_snv_eval_parser
-from .commands.scale import add_snv_scale_parser, add_snv_calc_scaling_factor_parser
+from .commands.scale import add_snv_scale_parser, add_snv_calc_scaling_factor_parser, add_snv_poisson_calib_parser
 from .commands.get_best_model import add_snv_get_best_model_parser
 
 # import scripts
@@ -62,6 +62,7 @@ def create_parser():
     calc_scaling_factor_parser = add_snv_calc_scaling_factor_parser(subparsers)
     scale_parser = add_snv_scale_parser(subparsers)
     get_best_model_parser = add_snv_get_best_model_parser(subparsers)
+    poisson_calib_parser = add_snv_poisson_calib_parser(subparsers)
 
     # global options
     optional.title = '[General help]' 
@@ -78,7 +79,8 @@ def create_parser():
         'evaluate': eval_parser,
         'calc_scaling_factor': calc_scaling_factor_parser,
         'scale': scale_parser,
-        'get_best_model': get_best_model_parser
+        'get_best_model': get_best_model_parser,
+        'poisson_calib': poisson_calib_parser
     }
     
     return parser, subparsers
@@ -122,6 +124,9 @@ def main():
 
     elif args.func == 'scale':
         scaling_files(args.pred_file, args.scale_factor, args.n_class, args.out_file)
+    elif args.func == 'poisson_calib':
+        from MuRaL.model.calibration import poisson_calibrate_file
+        poisson_calibrate_file(args.pred_file)
     
     elif args.func == 'get_best_model':
         get_best_model(args.trial_path)

@@ -16,7 +16,7 @@ from Bio.Seq import reverse_complement
 from scipy.stats import pearsonr
 import numpy as np
 
-import MuRaL.data.preprocessing 
+from MuRaL.utils.info_utils import parse_pred_header, read_pred_line
 from typing import Dict, Any
 
 def parse_arguments():
@@ -212,17 +212,19 @@ def run_motif_corr_calc(args, model_type:'str') -> None:
         header = next(obs_file)
         if not header.startswith('chrom'):
             raise ValueError(f"Invalid file header: {header.strip()}, header should be continue with 'chrom'")
-            # Parse line
-        # check file is consistent with parameter
-        header = header.strip().split('\t')
-        if len(header) != n_class + 5:
-            raise ValueError(
-                f"Column count mismatch. Expected {n_class + 5} columns, "
-                f"got {len(header)} in line: {header}")
+        # Parse line
+        header_info = parse_pred_header(header)
 
         for line in obs_file:
             line = line.strip().split('\t')
-            chrom, start, end, strand, mut = line[:5] 
+            parsed = read_pred_line(line, header_info, recurrent=False)
+            chrom = parsed['chrom']
+            start, end = parsed['start'], parsed['end']
+            strand = parsed['strand']
+            mut = parsed['mut_type']
+            probs = parsed['probs']
+            count = parsed['count']
+
             if model_type == 'indel':
                 strand = args.strand
             probs = np.asarray(line[5:], dtype='float') # prob0 to prob n

@@ -1,3 +1,10 @@
 This directory contains example data and command lines for running `mural_snv` and `mural_indel`.
 - The `snv` folder contains `mural_snv` examples
 - The `indel` folder contains `mural_indel` examples
+
+Recurrent mutation example data
+-------------------------------
+The `recurrent_training.sorted.bed` and `recurrent_validation.sorted.bed` files
+in `snv/data/` are synthetic recurrent mutation BED files generated from the
+standard training and validation files via `generate_recurrent_data.py`. They are
+provided for demonstration purposes only and do not represent real biological data.

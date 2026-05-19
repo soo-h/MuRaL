@@ -11,6 +11,8 @@ import argparse
 from scipy.stats import pearsonr
 from typing import Dict, Tuple, Any
 
+from MuRaL.utils.info_utils import parse_pred_header, read_pred_line
+from MuRaL.evaluation.obs_pred_aggregator import RegionMutSaver
 
 
 def parse_arguments(parser):
@@ -21,24 +23,6 @@ def parse_arguments(parser):
     parser.add_argument('--out_prefix', type=str, help='name prefix for output files storing regional mutation rates and correlations')
     args = parser.parse_args()
     return args
-
-class RegionMutSaver:
-    def __init__(self, n_class):
-        self.n_class = n_class
-        self.region_mut_obs = {}
-        self.region_mut_pred = {}
-    
-    def add_obs(self, region, mut_type):
-        if region not in self.region_mut_obs:
-            self.region_mut_obs[region] = np.zeros(self.n_class)
-        self.region_mut_obs[region][mut_type] += 1
-    
-    def add_pred(self, region, probs):
-        if region not in self.region_mut_pred:
-            self.region_mut_pred[region] = np.zeros(self.n_class)
-        for i in range(self.n_class):
-            self.region_mut_pred[region][i] += probs[i]
-
 
 def filt_region(df: DataFrame, ratio_cutoff: float) -> DataFrame:
     """
@@ -70,13 +54,13 @@ def win_cut_cal(site_counts, ratio_cutoff):
     return site_count_cutoff
 
 
-def record_region_mut(chrom: str, window_end: int, mut_type: int, probs: list, data_saver) -> None:
+def record_region_mut(chrom: str, window_end: int, mut_type: int, probs: list, count:int, data_saver) -> None:
     """Process mutation site statistics for a single k-mer"""
     # get region keys
     region_key = (chrom, window_end)
 
     # Update region counts
-    data_saver.add_obs(region_key, mut_type)
+    data_saver.add_obs(region_key, mut_type, count)
     data_saver.add_pred(region_key, probs)
 
 
@@ -110,16 +94,16 @@ def calculate_mutation_rates(region_mut_saver: Any) -> pd.DataFrame:
     data = []
     
     # Process each genomic region
-    for (chrom, window_end), obs_counts in region_mut_saver.region_mut_obs.items():
-        total = obs_counts.sum()
+    for (chrom, window_end), obs_counts in region_mut_saver.obs.items():
+        n_sites = region_mut_saver.site_count[(chrom, window_end)]
         chroms.append(chrom)
         window_ends.append(window_end)
         
         data.append(np.concatenate([
-            obs_counts[1:] / total,  # Normalized observed rates
-            region_mut_saver.region_mut_pred[(chrom, window_end)][1:] / total,  # Normalized predicted rates
+            obs_counts[1:] / n_sites,  # Normalized observed rates
+            region_mut_saver.pred[(chrom, window_end)][1:] / n_sites,  # Normalized predicted rates
             obs_counts[1:],  # Raw mutation counts
-            [total]  # Total counts
+            [n_sites]  # Total site count
         ]))
     
     # Create DataFrame
@@ -179,19 +163,22 @@ def run_regional_corr_calc(args):
         header = next(obs_file)
         if not header.startswith('chrom'):
             raise ValueError(f"Invalid file header: {header.strip()}, header should be continue with 'chrom'")
-            # Parse line
-        # check file is consistent with parameter
-        header = header.strip().split('\t')
-        if len(header) != n_class + 5:
-            raise ValueError(
-                f"Column count mismatch. Expected {n_class + 5} columns, "
-                f"got {len(len(header))} in line: {header}")
+        # Parse line
+        header_info = parse_pred_header(header)
+
+        if args.recurrent and not header_info['has_info']:
+            print('WARNING: --recurrent is enabled but prediction file has no '
+                  'info column. Falling back to count=1 for all sites.',
+                  file=sys.stderr)
 
         for line in obs_file:
             line = line.strip().split('\t')
-            chrom, start, end, strand, mut = line[:5] 
-            probs = np.asarray(line[5:], dtype='float') # prob0 to prob n
-            start, end, mut = int(start), int(end), int(mut)
+            parsed = read_pred_line(line, header_info, recurrent=args.recurrent)
+            chrom = parsed['chrom']
+            start = parsed['start']
+            mut = parsed['mut_type']
+            probs = parsed['probs']
+            count = parsed['count']
 
             window_end = start // window_size * window_size + window_size # located window of each site
             # Process site statistics
@@ -200,6 +187,7 @@ def run_regional_corr_calc(args):
                 window_end=window_end,
                 mut_type=mut,
                 probs=probs,
+                count=count,
                 data_saver=region_mut_saver
             )
     # Calculate and save results
