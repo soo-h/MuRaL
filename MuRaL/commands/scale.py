@@ -55,22 +55,22 @@ def add_indel_scale_parser(subparsers: argparse._SubParsersAction) -> argparse.A
 
         Example Scaling Command:
         --------------------------
-        1. Calculate scaling factors:
+        1. Estimate the factor from checkpoint 9 predictions on the example validation BED:
 
-            mural_indel calc_scaling_factor --pred_files insertion_validation.ckpt6.fdiri.tsv.gz --genomewide_mu 1.5e-9 
-            --m_proportions 0.352 > scaling_factor.out
+            mural_indel calc_scaling_factor --pred_files insertion_validation.ckpt9.fdiri.tsv.gz --genomewide_mu 1.5e-9 --m_proportions 0.352 > scaling_factor.out
 
-        # Output file 'scaling_factor.out' may look like the following:
-            pred_file: insertion_validation.ckpt6.fdiri.tsv.gz
+        # Output in 'scaling_factor.out':
+            pred_file: insertion_validation.ckpt9.fdiri.tsv.gz
             genomewide_mu: 1.5e-09
-            n_sites: 221240912
+            n_sites: 24716
+            g_proportion: 1
             m_proportion: 0.352
-            prob_sum: 4.000e+03
-            scaling factor: 6.271e-09
+            prob_sum: 2.812e+03
+            scaling factor: 4.641e-09
 
-        2. Apply scaing:
+        2. Apply the validation factor to chromosome 1 predictions from the same model:
 
-            mural_indel scale --pred_file insertion_chr1.tsv.gz --scale_factor 6.271e-09 --out_file insertion_chr1.scaled.tsv.gz
+            mural_indel scale --pred_file insertion_chr1.tsv.gz --scale_factor 4.641e-09 --out_file insertion_chr1.scaled.tsv.gz
 
         Similarly, you can generate the scaled mutation rates for deletion start and deletion end sites like 
         the above example. More details can be found in the MuRaL-indel paper
@@ -190,22 +190,22 @@ def add_indel_calc_scaling_factor_parser(subparsers: argparse._SubParsersAction)
 
         Example Scaling Command:
         --------------------------
-        1. Calculate scaling factors:
+        1. Estimate the factor from checkpoint 9 predictions on the example validation BED:
 
-            mural_indel calc_scaling_factor --pred_files insertion_validation.ckpt6.fdiri.tsv.gz --genomewide_mu 1.5e-9 
-            --m_proportions 0.352 > scaling_factor.out
+            mural_indel calc_scaling_factor --pred_files insertion_validation.ckpt9.fdiri.tsv.gz --genomewide_mu 1.5e-9 --m_proportions 0.352 > scaling_factor.out
 
-        # Output file 'scaling_factor.out' may look like the following:
-            pred_file: insertion_validation.ckpt6.fdiri.tsv.gz
+        # Output in 'scaling_factor.out':
+            pred_file: insertion_validation.ckpt9.fdiri.tsv.gz
             genomewide_mu: 1.5e-09
-            n_sites: 221240912
+            n_sites: 24716
+            g_proportion: 1
             m_proportion: 0.352
-            prob_sum: 4.000e+03
-            scaling factor: 6.271e-09
+            prob_sum: 2.812e+03
+            scaling factor: 4.641e-09
 
-        2. Apply scaing:
+        2. Apply the validation factor to chromosome 1 predictions from the same model:
 
-            mural_indel scale --pred_file insertion_chr1.tsv.gz --scale_factor 6.271e-09 --out_file insertion_chr1.scaled.tsv.gz
+            mural_indel scale --pred_file insertion_chr1.tsv.gz --scale_factor 4.641e-09 --out_file insertion_chr1.scaled.tsv.gz
 
         Similarly, you can generate the scaled mutation rates for deletion start and deletion end sites like 
         the above example. More details can be found in the MuRaL-indel paper

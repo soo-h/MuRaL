@@ -1,6 +1,6 @@
 This folder contains the best trained models with lowest validation losses for the Arabidopsis thaliana genome. 50,000 mutated and 1,000,000 non-mutated sites were chosen for training each of insertion, deletion start, deletion end models
 
-hyperparameter settings for MuRaL-indel (v1.3.0):
+hyperparameter settings for MuRaL-indel (v1.2.0):
 --radius        2000
 --downsample_stride_list        1, 4, 5, 5, 5, 2
 --kernel_size   7

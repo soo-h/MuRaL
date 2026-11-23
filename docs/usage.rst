@@ -22,7 +22,7 @@ Framework Components
    * - **MuRaL-snv**
      - Estimates single-nucleotide variant (SNV) rates 
    * - **MuRaL-indel**
-     - Estimates small insertion/deletion (INDEL) rates (1-50bp)
+     - Estimates rates for insertions and deletions of 1–20 bp. The human models group lengths of 7–20 bp into a single class.
 
 Key advantages over conventional methods:
 
@@ -279,15 +279,35 @@ testing datasets. Importantly, the training and validation BED file **MUST
 BE SORTED** by chromosome coordinates. You can sort BED files by
 ``bedtools sort`` or ``sort -k1,1 -k2,2n``.
 
+Deletion breakpoints in repeats
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A deletion in a repeat can have several placements that produce the same
+alternate sequence. Starting from the left-aligned VCF record, identify
+the equivalent placements on the reference and choose one at random per
+event. This avoids systematically assigning deletions to one end of a
+repeat. Use that same placement for both breakpoints and both strands.
+
+For example, the GRCh38 record ``chr1:13153 AAGG>A`` has a 1-based VCF
+position. One equivalent placement in the training data spanned the
+0-based, half-open interval ``[13154, 13157)``. The deletion-start BED
+contains ``[13154, 13155) +`` and ``[13157, 13158) -``. The deletion-end
+BED contains the same two intervals with strands ``-`` and ``+``, respectively.
+
 Recurrent mutation BED format
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-When analyzing recurrent mutations (sites mutated multiple times across
-individuals), use the ``--recurrent`` flag during training, prediction
-and evaluation. In this mode, the 4th column (name field) of the BED
-file encodes per-site information in a semicolon-separated format:
-``chrom:start;ref>alt;AC;count``, where AC is the allele count (integer;
--1 if unavailable) and the last field is the observed mutation count:
+Use ``--recurrent`` only when the number of independent mutation events is
+known. If only the population allele count (AC) is available, use the
+default mode. For each mutation class, record whether the mutation was
+observed at the site (1) or absent (0). In multiclass files, BED column 5
+still identifies the observed class (e.g. 2 for A>G in the example above).
+
+For recurrent mutation training, prediction and evaluation, BED column 4
+(the name field) uses the format ``chrom:start;ref>alt;AC;count``.
+``AC`` counts observed copies of the alternate allele (use -1 if unknown).
+``count`` counts independent mutation events. Multiple copies of an allele
+can descend from a single event.
 
 .. code-block:: text
 
@@ -610,11 +630,17 @@ Input Requirements
 Output data
 ~~~~~~~~~~~
 
-The output of ``mural_snv predict`` is a tab-separated file containing
-the sequence coordinates (BED-formatted) and the predicted probabilities
-for all possible mutation types. Usually, the 'prob0' column contains
-probabilities for the non-mutated class and other 'probX' columns for
-mutated classes. Some example lines of a prediction output file are shown below.
+The prediction TSV contains site coordinates and one column per class.
+Before Poisson correction, ``prob0`` is the probability of no mutation at the
+site, and ``prob1`` onward give the mutation class probabilities.
+
+INDEL prediction applies Poisson correction by default. For SNV prediction,
+use ``--poisson_calib`` to enable it. Under the Poisson model, the probability
+of zero events, *p₀*, gives the expected number of events at the site,
+*λ* = −ln(*p₀*). This accounts for the possibility that a site mutates more
+than once. After correction, use ``prob1`` onward for the expected event
+counts by mutation class. The retained ``prob0`` column contains 1 − *λ* and
+can be negative. Exclude it from mutation intensity analyses.
 
 SNV output:
 
@@ -627,6 +653,13 @@ SNV output:
     chr1    10012   10013   -       0       0.9711  0.004898 0.02029 0.003746
 
 INDEL output:
+
+The human deletion-start and deletion-end models each return a vector for
+each input site. At a given site, ``prob3`` in the start-model output
+describes a 3 bp deletion starting there. The same column in the end-model output
+describes a 3 bp deletion ending there. To annotate a known deletion,
+report the start-model value at its start and the end-model value at its
+end. With Poisson correction, both values are mutation intensities.
 
 .. code-block:: text
 
@@ -772,13 +805,11 @@ K-mer correlation analysis
 Input data
 ^^^^^^^^^^
 
-The inputs for k-mer correlation analysis include the reference
-FASTA file, a prediction tsv file and the length of k-mer. Note that for 
-evaluation, we need to provide a specific set of observed mutations 
-(e.g. all available rare variants), which are stored in the 5th column of 
-the prediction tsv files. These observed mutations are used for
-calculating observed mutation rates. We can change the content in the 5th 
-column to evaluate model performance in different observed mutation data.
+K-mer correlation analysis requires a reference FASTA file, a prediction TSV
+file and a k-mer length. The evaluator reads observed mutation types from
+``mut_type`` (the fifth column in the examples above). In prediction files
+with an ``info`` column, ``mut_type`` is the sixth column. To evaluate a
+different set of observed mutations, update ``mut_type`` for each site.
    
 Output data
 ^^^^^^^^^^^
@@ -844,11 +875,9 @@ Regional correlation analysis
 Input data
 ^^^^^^^^^^
 
-The inputs for regional correlation analysis include a prediction tsv 
-file and the window size. Like the k-mer correlation analysis, we need to 
-provide a specific set of observed mutations in the 5th column of the prediction
-tsv files. These observed mutations are used for calculating observed 
-regional mutation rates. 
+Regional correlation analysis requires a prediction TSV file and a window size.
+Observed regional mutation rates are calculated from ``mut_type`` (the fifth
+column in the examples above, or the sixth in files with ``info``).
 
 Output data
 ^^^^^^^^^^^
@@ -1127,50 +1156,45 @@ closely related species.
 Note: Each deletion has two breakpoints—designated as the deletion start and deletion end. 
 These two labels refer to the same deleted interval, so, same proportions are used for both.
 
-To calculate the scaling factor, we need to have the predicted mutation rates for
-a set of representative sites based on a trained model. It is recommended to use
-the validation sites at the training step whose size is relatively small and 
-representative enough. For instance, the following command is for obtaining 
-predicted mutation rates for validation sites of the INDEL model.
-
-::
+Estimate the insertion scaling factor from predictions on representative
+validation sites. From the ``examples/`` directory, run the bundled insertion
+model on the validation BED::
  
-    mural_indel predict --ref_genome indel/data/seq.fa --test_data indel/data/insertion_validation.sorted.bed \
-    --model_path models/checkpoint_6/model --model_config_path models/checkpoint_6/model.config.pkl  \
-    --calibrator_path  models/checkpoint_6/model.fdiri_cal.pkl \
-    --pred_file insertion_validation.ckpt6.fdiri.tsv.gz \
-    --cpu_only > test.out 2> test.err
+    mural_indel predict --ref_genome indel/data/seq.fa --test_data indel/data/validation.sorted.bed \
+        --model_path indel/models/checkpoint_9/model --model_config_path indel/models/checkpoint_9/model.config.pkl \
+        --calibrator_path indel/models/checkpoint_9/model.fdiri_cal.pkl \
+        --pred_file insertion_validation.ckpt9.fdiri.tsv.gz --cpu_only
 
-Next, the command ``mural_indel scale`` will be used to compute the scaling
-factor based on the predicted rates, the proportions of insertion mutation types, 
-and the genome-wide per generation mutation rate.
+Use that validation prediction file to calculate the factor. For insertions,
+the factor is the genome-wide INDEL rate times the insertion proportion
+times the number of validation sites, divided by the sum of ``prob1`` through
+``prob7`` across those sites.
 
 :: 
 
-    mural_indel calc_scaling_factor --pred_files insertion_validation.ckpt6.fdiri.tsv.gz --genomewide_mu 1.5e-9 
-    --m_proportions 0.352 > scaling_factor.out
+    mural_indel calc_scaling_factor --pred_files insertion_validation.ckpt9.fdiri.tsv.gz \
+        --genomewide_mu 1.5e-9 --m_proportions 0.352 > scaling_factor.out
  
 Output file 'scaling_factor.out' may look like the following:
 
 ::
 
-    pred_file: insertion_validation.ckpt6.fdiri.tsv.gz
+    pred_file: insertion_validation.ckpt9.fdiri.tsv.gz
     genomewide_mu: 1.5e-09
-    n_sites: 221240912
+    n_sites: 24716
+    g_proportion: 1
     m_proportion: 0.352
-    prob_sum: 4.000e+03
-    scaling factor: 6.271e-09
+    prob_sum: 2.812e+03
+    scaling factor: 4.641e-09
 
 Step 2: Apply scaling
 """"""""""""""""""""""""""""""""""""
  
-Finally, the obtained scaling factor ``6.271e-09`` is used to scale all the 
-predicted rates of all insertion sites using ``mural_indel scale --scale_factors``. You can run  
-separately for each chromosome.
-
-::
+Apply the factor estimated on the validation sites to insertion predictions
+from the same model and calibration settings. For example, to scale a file
+of chromosome 1 predictions::
  
- mural_indel scale --pred_file insertion_chr1.tsv.gz --scale_factor 6.271e-09 --out_file insertion_chr1.scaled.tsv.gz
+    mural_indel scale --pred_file insertion_chr1.tsv.gz --scale_factor 4.641e-09 --out_file insertion_chr1.scaled.tsv.gz
 
 Similarly, you can generate the scaled mutation rates for `deletion start` and `deletion end` sites like
 the above example. More details can be found in the MuRaL-indel paper.

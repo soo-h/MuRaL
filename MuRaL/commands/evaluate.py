@@ -74,10 +74,9 @@ def add_indel_eval_parser(subparsers: argparse._SubParsersAction) -> argparse._S
       - K-mer length parameter
 
       Note for evaluation:
-      The 5th column of the prediction TSV must contain observed mutation data
-      (e.g., rare variants). These observed mutations are used to calculate
-      observed mutation rates. You can modify this column to evaluate model
-      performance against different observed mutation datasets.
+      The evaluator reads observed mutation types from mut_type (the fifth column
+      in prediction files without info, or the sixth in files with info).
+      To evaluate another set of observed mutations, update mut_type for each site.
 
       Output files:
        The outputs include a file ('\*-mer.mut\_rates.tsv') storing predicted and 
@@ -109,8 +108,8 @@ def add_indel_eval_parser(subparsers: argparse._SubParsersAction) -> argparse._S
       - Prediction file (TSV format)
       - Window size parameter
 
-      Similar to k-mer analysis, the 5th column should contain the specific set
-      of observed mutations used for calculating regional mutation rates.
+      Regional mutation rates use the observed mutation types in mut_type (the
+      fifth column in prediction files without info, or the sixth in files with info).
 
       Output data:
        There are multiple output files. The files storing regional rates 
@@ -188,10 +187,9 @@ def add_snv_eval_parser(subparsers: argparse._SubParsersAction) -> argparse._Sub
       - K-mer length parameter
 
       Note for evaluation:
-      The 5th column of the prediction TSV must contain observed mutation data
-      (e.g., rare variants). These observed mutations are used to calculate
-      observed mutation rates. You can modify this column to evaluate model
-      performance against different observed mutation datasets.
+      The evaluator reads observed mutation types from mut_type (the fifth column
+      in prediction files without info, or the sixth in files with info).
+      To evaluate another set of observed mutations, update mut_type for each site.
 
       Output data:
        The outputs include a file ('\*-mer.mut\_rates.tsv') storing predicted and 
@@ -227,8 +225,8 @@ def add_snv_eval_parser(subparsers: argparse._SubParsersAction) -> argparse._Sub
       - Prediction file (TSV format)
       - Window size parameter
 
-      Similar to k-mer analysis, the 5th column should contain the specific set
-      of observed mutations used for calculating regional mutation rates.
+      Regional mutation rates use the observed mutation types in mut_type (the
+      fifth column in prediction files without info, or the sixth in files with info).
 
       Output data:
        There are multiple output files. The files storing regional rates 

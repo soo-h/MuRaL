@@ -4,7 +4,7 @@ training set comprised:
     insertion: 10,000 mutation sites and 200,000 non-mutation sites. 
     deletions: 20,000 mutation sites and 400,000 non-mutation sites. 
 
-hyperparameter settings for MuRaL-indel (v1.3.0):
+hyperparameter settings for MuRaL-indel (v1.2.0):
 --radius        2000
 --downsample_stride_list        1, 4, 5, 5, 5, 2
 --kernel_size   7
